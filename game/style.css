@@ -156,3 +156,35 @@ kbd {
 }
 .loop-ico.empty { opacity: .25; }
 @media (max-width: 420px) { .skins { grid-template-columns: 1fr 1fr; } .board li { gap: 6px; } }
+
+/* ---------- campaign, wingmen, level and boss bars ---------- */
+.row-btns.big { margin-bottom: 10px; }
+.row-btns.big .big-btn { margin: 0; font-size: 30px; }
+.big-btn.alt { background: linear-gradient(#d6ecff, #8fc4ff 50%, #3a7bd5); box-shadow: 0 5px 0 #1d3f73, 0 10px 24px #0007; }
+.big-btn.alt:active { box-shadow: 0 2px 0 #1d3f73; }
+#topCenter {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(44vw, 300px); text-shadow: 0 1px 0 #0009;
+}
+#wingmen { display: flex; align-items: center; gap: 6px; }
+#topCenter .lbl { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.wm-icons { display: flex; gap: 3px; }
+.wm svg { width: 22px; height: 22px; fill: #fff; display: block; filter: drop-shadow(0 1px 1px #0009); }
+.wm.lost svg { fill: none; stroke: #ffffff80; stroke-width: 1.2; }
+#levelBar, #bossBar { width: 100%; text-align: center; }
+#topCenter .bar { height: 8px; border-radius: 4px; background: #0006; overflow: hidden; margin-top: 3px; }
+#topCenter .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .2s; }
+#topCenter .bar.boss { height: 12px; border: 1px solid #ff6a6a99; }
+#topCenter .bar.boss i { background: linear-gradient(90deg, #ff3b3b, #ff8a3b); }
+#bossName { color: #ffc2c2; }
+.levels { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 14px; }
+.level-card { display: grid; grid-template-columns: 58px 1fr auto; gap: 12px; align-items: center; background: #0003; border-radius: 12px; padding: 8px 10px 8px 8px; text-align: left; }
+.level-card .swatch { height: 52px; }
+.level-card .t { font-family: var(--display); font-size: 28px; line-height: .95; font-weight: 600; }
+.level-card .d { font-size: 12px; opacity: .8; line-height: 1.35; }
+.level-card.locked { opacity: .55; }
+.level-card.cleared .t::after { content: " ✓"; color: var(--accent); }
+@media (max-width: 420px) {
+  #topCenter { top: calc(max(12px, env(safe-area-inset-top)) + 48px); width: 62vw; }
+  .row-btns.big .big-btn { font-size: 26px; }
+}
