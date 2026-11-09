@@ -1184,6 +1184,7 @@ function newGame(opts = {}) {
   const level = mode === 'campaign' ? opts.level || 1 : 0;
   applyTheme(mode === 'campaign' ? LEVELS[level - 1].theme : 'sky');
   removeBoss();
+  setMusicTrack('cruise');
   wing.active = false; wingMesh.visible = false; beam.visible = false;
   for (const st of [...straights]) disposeStraight(st);
   straights = []; passed = []; removeQueue = [];
@@ -1416,16 +1417,33 @@ function hitObstacle(ob) {
 
 // a loyal wingman swoops in and shoots the mine down just before impact
 function wingmanSave(ob) {
-  game.wingmen--;
   smash(ob, player.st, false); // leaves the mine's world position in _v
-  wing.target.copy(_v);
+  launchWingman(_v, 'Wingman saved you!');
+}
+
+// ...or flies into the line of fire and soaks up a whole boss burst
+function wingmanBlock(hit) {
+  for (const b of bullets) {
+    if (!b.boss || b.st !== player.st) continue;
+    const r = b.s - player.s;
+    if (r > -2 && r < 26 && Math.abs(b.x - player.x) < 1.6) {
+      b.kill = true;
+      burst(b.mesh.position, 0xffe080, 6);
+    }
+  }
+  launchWingman(hit.mesh.position, 'Wingman blocked the burst!');
+}
+
+function launchWingman(target, msg) {
+  game.wingmen--;
+  wing.target.copy(target);
   wing.side = player.x <= 0 ? 1 : -1;
   wing.t = 0;
   wing.active = true;
   wingMesh.visible = true;
   shake = 0.2;
   sfx('wingman');
-  hud.toast(game.wingmen > 0 ? `Wingman saved you! ${game.wingmen} left` : 'Wingman saved you! None left');
+  hud.toast(game.wingmen > 0 ? `${msg} ${game.wingmen} left` : `${msg} None left`);
 }
 
 function animateWingman(dt) {
@@ -1461,6 +1479,7 @@ function spawnBoss() {
   };
   ui.bossName.textContent = def.name;
   hud.toast('Warning! Boss incoming');
+  setMusicTrack('boss');
   sfx('warn');
   setTimeout(() => sfx('warn'), 450);
 }
@@ -1586,7 +1605,7 @@ function bossGuns(b, n) {
       const m = bulletPool.pop() || new THREE.Mesh(G.tracer, M.tracer);
       if (!m.parent) scene.add(m);
       m.visible = true;
-      bullets.push({ mesh: m, st: player.st, s: b.s - 3 - i * 2.4, x: b.x + off, y: CRUISE, prevR: Infinity, v: 34 });
+      bullets.push({ mesh: m, st: player.st, s: b.s - 3 - i * 2.4, x: b.x + off, y: CRUISE, prevR: Infinity, v: 34, boss: true });
     }
   }
   sfx('gun');
@@ -1607,6 +1626,7 @@ function hitBoss() {
     game.bossDone = true;
     game.score += 2000 * game.level;
     hud.toast(game.level === LEVELS.length ? 'Final boss destroyed!' : 'Boss destroyed!');
+    setMusicTrack('cruise');
     sfx('boom');
     shake = 0.5;
   } else if (b.id === 'monster') {
@@ -1929,12 +1949,15 @@ function updateBullets(dt) {
     b.s -= b.v * dt;
     const onTrack = b.st === player.st;
     const r = onTrack ? b.s - player.s : -Infinity;
-    let dead = !onTrack || r < -12;
+    let dead = !onTrack || r < -12 || b.kill;
     if (!dead && b.prevR >= -0.8 && r <= 1.0 && Math.abs(b.x - player.x) < 0.95 && Math.abs(b.y - player.alt) < 0.9) {
       if (player.rollT > 0 || player.shield > 0 || game.levelClear) {
         burst(b.mesh.position, 0xffe080, 5);
         sfx('ping');
         if (player.rollT > 0) hud.toast('Deflected!');
+        dead = true;
+      } else if (b.boss && game.wingmen > 0) {
+        wingmanBlock(b);
         dead = true;
       } else {
         die('shot');
@@ -2273,7 +2296,7 @@ function updateCamera(dt) {
 }
 
 // ============================================================ audio (WebAudio synth, no files)
-let actx = null, master = null, musicBus = null, noiseBuf = null;
+let actx = null, master = null, musicBus = null, guitarBus = null, leadBus = null, noiseBuf = null;
 let muted = store.get('starlane.muted', false);
 let musicTimer = null, musicNext = 0, musicStep = 0, musicBar = 0;
 
@@ -2286,8 +2309,29 @@ function initAudio() {
   master.gain.value = muted ? 0 : 0.5;
   master.connect(actx.destination);
   musicBus = actx.createGain();
-  musicBus.gain.value = 0.38;
+  musicBus.gain.value = 0.42;
   musicBus.connect(master);
+  // power-chord synth through a soft distortion
+  guitarBus = actx.createGain();
+  guitarBus.gain.value = 0.5;
+  const drive = actx.createWaveShaper();
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) { const x = (i / 1023) * 2 - 1; curve[i] = Math.tanh(x * 4); }
+  drive.curve = curve;
+  const tame = actx.createBiquadFilter();
+  tame.type = 'lowpass'; tame.frequency.value = 2600;
+  guitarBus.connect(drive).connect(tame).connect(musicBus);
+  // lead synth with a dotted-eighth echo
+  leadBus = actx.createGain();
+  leadBus.gain.value = 0.55;
+  const echo = actx.createDelay(1);
+  echo.delayTime.value = (60 / MUSIC_BPM) * 0.75;
+  const fb = actx.createGain();
+  fb.gain.value = 0.32;
+  leadBus.connect(musicBus);
+  leadBus.connect(echo);
+  echo.connect(fb).connect(echo);
+  echo.connect(musicBus);
   noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -2358,24 +2402,129 @@ function sfx(name) {
   }
 }
 
-const CHORDS = [[110, 130.8, 164.8], [87.3, 110, 130.8], [98, 123.5, 146.8], [82.4, 98, 123.5]];
-function musicStepAt(step, t) {
-  const ch = CHORDS[musicBar % 4];
+// ---------- music: an original 80s rock-synth jet anthem, composed for this game ----------
+const MUSIC_BPM = 132; // boss anthem tempo
+const CRUISE_BPM = 120;
+let musicTrack = 'cruise';
+let wantTrack = 'cruise';
+function setMusicTrack(name) { wantTrack = name; }
+// normal flying: a driving synthwave groove (original)
+const CRUISE_CHORDS = [[110, 130.8, 164.8], [87.3, 110, 130.8], [98, 123.5, 146.8], [82.4, 98, 123.5]];
+function cruiseStepAt(step, t) {
+  const ch = CRUISE_CHORDS[musicBar % 4];
   if (step % 4 === 0) tone(t, 140, 0.25, 'sine', 0.8, 45, musicBus);
   if (step === 4 || step === 12) noise(t, 0.18, 0.35, 1800, 0.7, 'bandpass', musicBus);
   if (step % 2 === 1) noise(t, 0.04, 0.08, 8000, 0.8, 'highpass', musicBus);
   tone(t, (ch[0] / 2) * (step % 2 ? 2 : 1), 0.12, 'sawtooth', 0.12, 0, musicBus, 600);
   tone(t, ch[step % 3] * (step % 8 < 4 ? 4 : 2), 0.1, 'square', 0.035, 0, musicBus, 3200);
+  if (step === 0 && musicBar % 2 === 0) tone(t, ch[0] * 2, STEP_CRUISE * 14, 'triangle', 0.05, 0, musicBus, 1800); // soft pad swell
+}
+const STEP_CRUISE = 60 / CRUISE_BPM / 4;
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+// one chord per bar (MIDI root): Em C G D Em C D B
+const BAR_ROOTS = [40, 36, 43, 38, 40, 36, 38, 35];
+// lead melody for bars 9-16 of the 16-bar loop: [16th step, MIDI note, length in 16ths]
+const LEAD = [
+  [[0, 76, 4], [4, 79, 2], [6, 83, 6], [12, 81, 4]],
+  [[0, 79, 6], [6, 76, 2], [8, 84, 8]],
+  [[0, 83, 4], [4, 86, 4], [8, 83, 2], [10, 79, 6]],
+  [[0, 81, 8], [8, 78, 4], [12, 81, 4]],
+  [[0, 88, 6], [6, 86, 2], [8, 83, 8]],
+  [[0, 84, 4], [4, 83, 4], [8, 79, 4], [12, 76, 4]],
+  [[0, 78, 4], [4, 81, 4], [8, 86, 8]],
+  [[0, 87, 8], [8, 83, 8]],
+];
+const STEP = 60 / MUSIC_BPM / 4;
+function crash(t) { noise(t, 1.4, 0.4, 6000, 0.5, 'highpass', musicBus); tone(t, 110, 0.6, 'sawtooth', 0.12, 55, musicBus, 900); }
+
+function powerChord(t, root, dur, vol) {
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.connect(guitarBus);
+  for (const [iv, det] of [[0, -6], [0, 6], [7, 0], [12, -4]]) {
+    const o = actx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = mtof(root + 12 + iv);
+    o.detune.value = det;
+    o.connect(g);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+}
+
+function leadNote(t, midi, dur) {
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.11, t + 0.03);
+  g.gain.setValueAtTime(0.11, t + Math.max(0.04, dur - 0.08));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.12);
+  const f = actx.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = 3800;
+  f.connect(g).connect(leadBus);
+  const vib = actx.createOscillator();
+  const vibAmt = actx.createGain();
+  vib.frequency.value = 5.5;
+  vibAmt.gain.setValueAtTime(0, t);
+  vibAmt.gain.linearRampToValueAtTime(9, t + Math.min(0.35, dur));
+  vib.connect(vibAmt);
+  for (const [type, det] of [['sawtooth', -7], ['sawtooth', 7], ['square', 0]]) {
+    const o = actx.createOscillator();
+    o.type = type;
+    o.frequency.value = mtof(midi);
+    o.detune.value = det;
+    vibAmt.connect(o.detune);
+    o.connect(f);
+    o.start(t);
+    o.stop(t + dur + 0.15);
+  }
+  vib.start(t);
+  vib.stop(t + dur + 0.15);
+}
+
+function musicStepAt(step, t) {
+  if (musicTrack === 'cruise') { cruiseStepAt(step, t); return; }
+  bossStepAt(step, t);
+}
+// boss fights: the anthem. Bars 0-3 riff, 4-11 lead melody, 12-15 riff again.
+function bossStepAt(step, t) {
+  const bar = musicBar % 16;
+  const root = BAR_ROOTS[bar % 8];
+  const intro = false;
+  if (!intro) {
+    if (step === 0 || step === 6 || step === 8 || step === 10 || (bar % 4 === 3 && step === 14)) tone(t, 150, 0.28, 'sine', 0.85, 45, musicBus);
+    if (step === 4 || step === 12) {
+      noise(t, 0.22, 0.55, 1900, 0.6, 'bandpass', musicBus);
+      tone(t, 200, 0.12, 'triangle', 0.25, 130, musicBus);
+    }
+    // drum fill into every 8th bar
+    if (bar % 8 === 7 && step >= 12) noise(t, 0.09, 0.35, 900 + step * 120, 0.8, 'bandpass', musicBus);
+  }
+  noise(t, 0.03, step % 2 ? 0.04 : 0.08, 8500, 0.8, 'highpass', musicBus); // 16th hats drive the fight
+  // pulsing 8th-note bass with an octave pop
+  if (step % 2 === 0 && !intro) tone(t, mtof(root - 12 + (step % 8 === 6 ? 12 : 0)), 0.2, 'sawtooth', 0.16, 0, musicBus, 520);
+  // power chords: a long hit on the downbeat, palm-muted chugs after
+  if (step === 0) powerChord(t, root, STEP * 5, 0.32);
+  else if (step % 2 === 0) powerChord(t, root, STEP * 1.2, 0.13);
+  if (bar >= 4 && bar < 12) for (const [st, midi, len] of LEAD[bar - 4]) if (st === step) leadNote(t, midi, len * STEP);
 }
 function startMusic() {
-  if (!actx || musicTimer) return;
+  if (!actx || musicTimer || !guitarBus) return;
   musicNext = actx.currentTime + 0.05;
   musicStep = 0;
+  musicBar = 0;
+  musicTrack = wantTrack;
   musicTimer = setInterval(() => {
-    const bpm = 120 + (game.speed - BASE_SPEED) * 1.2;
-    while (musicNext < actx.currentTime + 0.12) {
+    while (musicNext < actx.currentTime + 0.15) {
+      // switch tracks on a bar line; the boss anthem comes in with a crash
+      if (musicStep === 0 && wantTrack !== musicTrack) {
+        musicTrack = wantTrack;
+        musicBar = 0;
+        if (musicTrack === 'boss') crash(musicNext);
+      }
       musicStepAt(musicStep, musicNext);
-      musicNext += 60 / bpm / 4;
+      musicNext += musicTrack === 'boss' ? STEP : STEP_CRUISE;
       musicStep = (musicStep + 1) % 16;
       if (musicStep === 0) musicBar++;
     }
