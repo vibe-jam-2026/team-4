@@ -34,15 +34,16 @@ The menu says Esc pauses. It doesn't: Esc pulls the ejection handle and ends you
 
 ### Campaign
 
-Next to Endless, the **Campaign** has three levels, each with its own map and a boss at the end:
+Next to Endless, the **Campaign** has four levels, each with its own map and a boss at the end:
 
-| Level | Map | Score to reach | Boss (original designs inspired by Russian aircraft) |
+| Level | Map | Boss appears at | Boss (original designs inspired by Russian aircraft) |
 | --- | --- | --- | --- |
-| 1 | Ocean, with islands below | 1,500 | Heavy twin-tail fighter "Flanker" |
-| 2 | Mountains, with peaks beside the track | 2,500 | Swing-wing strategic bomber "Blackjack" |
-| 3 | Night | 3,500 | Final boss: stealth fighter "Felon" |
+| 1 | Ocean, with islands below | 1,500 points | Heavy twin-tail fighter "Flanker" |
+| 2 | Mountains, with peaks beside the track | 2,500 points | Swing-wing strategic bomber "Blackjack" |
+| 3 | Night, with glowing mines | 3,500 points | Stealth fighter "Felon" |
+| 4 | Storm over the sea, one long straight with no turns | right away | Final boss: ekranoplan "Sea Monster", in three phases |
 
-A bar at the top shows how close you are to the boss. The boss flies ahead of you, drops mines into the lanes and fires tracers back at you. Shoot it down with missiles to clear the level. It gets faster and more aggressive below half health. Clearing a level unlocks the next one, and your score carries over.
+A bar at the top shows how close you are to the boss. The boss flies ahead of you, drops mines into the lanes and fires tracers back at you. Shoot it down with missiles to clear the level. Bosses get faster and more aggressive as they lose health, and they climb over gates and corner barriers instead of flying through them. Clearing a level unlocks the next one, and your score carries over.
 
 ### Loyal wingmen
 
@@ -63,3 +64,7 @@ python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. Opening `index.html` straight from disk does not work, because ES modules need to be served over HTTP.
+
+### Trailer
+
+A 5-second vertical (9:16) trailer for reels and stories is in [media/trailer-reel.mp4](media/trailer-reel.mp4).
