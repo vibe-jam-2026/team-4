@@ -1,7 +1,7 @@
 # team-4
 Vibe Jam 2026 – lag 4
 
-## Gripen Starlane
+## Wings of War Forever
 
 An endless 3D space-lane flyer that runs in the browser. You fly a low-poly JAS 39 Gripen E along neon star lanes high above a ringed planet, chased by a hunter drone.
 

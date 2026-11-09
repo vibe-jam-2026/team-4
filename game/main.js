@@ -1,4 +1,4 @@
-// Gripen Starlane: an endless 3D space-lane flyer with a JAS 39 Gripen E.
+// Wings of War Forever: an endless 3D space-lane flyer with a JAS 39 Gripen E.
 // Plain ES module + Three.js (vendored). No build step.
 import * as THREE from './vendor/three.module.min.js';
 
