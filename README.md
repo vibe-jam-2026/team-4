@@ -3,7 +3,7 @@ Vibe Jam 2026 – lag 4
 
 ## Wings of War Forever
 
-An endless 3D sky-track flyer that runs in the browser. You fly a low-poly JAS 39 Gripen E along a glass track high above a sea of clouds, chased by a hunter drone.
+An endless 3D sky-track flyer that runs in the browser. You fly a low-poly JAS 39 Gripen E along a track of floating lights high above a sea of clouds, chased by a hunter drone and attacked head-on by enemy fighters.
 
 Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions are still at [instructions.html](instructions.html).
 
@@ -12,13 +12,15 @@ Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
 | Turn at a corner / change lane | ← → (or A D) | swipe left / right |
+| Barrel roll (deflects enemy cannon fire) | Shift + ← → | two-finger swipe |
+| Loop (clears anything you time it over) | E | |
 | Climb (over laser fences) | ↑ or W | swipe up |
 | Dive (under overhead barriers) | ↓ or S | swipe down |
-| Fire a missile (homes in on sky mines) | Space, F or click | tap |
+| Fire a missile (homes in on mines and fighters) | Space, F or click | tap |
 | Pause / mute | P or the pause button / M | buttons |
 | Pause? | Esc | |
 
-Near a corner, a **TURN** prompt and arrows on the track show which way to go. Pressing left or right then banks you into the turn; anywhere else it moves you one lane. At a T-junction you pick the way.
+Near a corner, a **TURN** prompt and arrows show which way to go. Pressing left or right then banks you into the turn; anywhere else it moves you one lane. At a T-junction you pick the way.
 
 The menu says Esc pauses. It doesn't: Esc pulls the ejection handle and ends your run.
 
@@ -26,9 +28,15 @@ The menu says Esc pauses. It doesn't: Esc pulls the ejection handle and ends you
 
 - Fly through gold rings to collect them. Power-ups: **Tractor Beam** pulls in rings, **Deflector** smashes through obstacles, **Double Rings**.
 - Sky mines block lanes: dodge them or shoot them. You carry two wingtip missiles, and each one reloads about a second after firing.
+- After 250 m, enemy fighters attack head-on. They line up on your lane and open fire: change lanes, barrel-roll through the bullets, loop over them, or shoot them down for a big bonus.
 - Your speed and score multiplier go up the farther you fly.
 - If you scrape a mine while changing lanes, the hunter drone closes in. Scrape twice in quick succession and it shoots you down.
-- Your best score and banked rings are saved in the browser.
+
+### Leaderboard and hangar
+
+- The top 10 scores on your device are kept in a local leaderboard. Enter your callsign after a qualifying run.
+- Rings you collect are banked. Spend them in the **Hangar** on Gripen color schemes: Sweden (50), Ukraine (100) and Brazil (150).
+- Everything is saved in the browser's local storage.
 
 ### Running locally
 

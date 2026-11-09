@@ -20,7 +20,7 @@
     <div class="coins"><span class="coin-ico"></span><span id="coins">0</span></div>
     <button id="pauseBtn" class="icon-btn" aria-label="Pause">❚❚</button>
   </div>
-  <div id="ammo"><span class="msl" id="mslL"></span><span class="msl" id="mslR"></span></div>
+  <div id="ammo"><span class="msl" id="mslL"></span><span class="loop-ico" id="loopIco">E</span><span class="msl" id="mslR"></span></div>
   <div id="powers"></div>
   <div id="turnHint"></div>
   <div id="toast"></div>
@@ -30,15 +30,39 @@
   <div class="panel">
     <div class="kicker">JAS 39 Gripen E</div>
     <h1><span>Wings of War</span><span>Forever</span></h1>
-    <p class="tag">Fly the sky track, collect rings, blast mines and outrun the hunter drone.</p>
+    <p class="tag">Fly the sky track, collect rings, shoot down bandits and outrun the hunter drone.</p>
     <button id="playBtn" class="big-btn">Take off</button>
+    <div class="row-btns">
+      <button id="hangarBtn" class="mid-btn">Hangar</button>
+      <button id="boardBtn" class="mid-btn">Leaderboard</button>
+    </div>
     <div class="best">Best: <b id="bestMenu">0</b> · Rings banked: <b id="bankMenu">0</b></div>
     <div class="controls">
       <div><kbd>←</kbd><kbd>→</kbd> turn at corners · change lanes</div>
       <div><kbd>↑</kbd> climb &nbsp; <kbd>↓</kbd> dive &nbsp; <kbd>Space</kbd> fire missile</div>
+      <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> barrel roll &nbsp; <kbd>E</kbd> loop</div>
       <div class="touch-only">Phone: swipe to steer, climb and dive · tap to fire</div>
       <div class="dim"><kbd>Esc</kbd> pause · <kbd>M</kbd> mute</div>
     </div>
+  </div>
+</div>
+
+<div id="board" class="screen hidden">
+  <div class="panel">
+    <div class="kicker">Top pilots on this device</div>
+    <h2>Leaderboard</h2>
+    <ol id="boardList" class="board"></ol>
+    <button id="boardBack" class="big-btn">Back</button>
+  </div>
+</div>
+
+<div id="hangar" class="screen hidden">
+  <div class="panel">
+    <div class="kicker">Paint your Gripen</div>
+    <h2>Hangar</h2>
+    <div class="best">Rings banked: <b id="hangarBank">0</b></div>
+    <div id="skinList" class="skins"></div>
+    <button id="hangarBack" class="big-btn">Back</button>
   </div>
 </div>
 
@@ -60,7 +84,15 @@
       <div><span>Rings</span><b id="finalCoins">0</b></div>
     </div>
     <div class="best" id="newBest">Best: <b>0</b></div>
+    <div id="nameRow" class="name-row hidden">
+      <label for="nameInput">Top 10! Your callsign:</label>
+      <div class="name-input">
+        <input id="nameInput" maxlength="12" autocomplete="off" spellcheck="false">
+        <button id="saveBtn" class="mid-btn">Save</button>
+      </div>
+    </div>
     <button id="againBtn" class="big-btn">Fly again</button>
+    <button id="overBoardBtn" class="link-btn">Leaderboard</button>
     <button id="menuBtn" class="link-btn">Menu</button>
   </div>
 </div>
