@@ -60,18 +60,23 @@ const THEMES = {
   mountains: { top: 0x4f7fc0, mid: 0xd3e0ec, bot: 0xe9eef4, sunCol: 0xfff0d8, fog: [60, 230], hemi: [0xe6eef8, 0x6a7280, 1.35], sun: [0xfff0dc, 2.3],
     cloud: [0xf4f6f9, 0x7c8796], cloudShade: [0xe6eaf0, 0x6e7988], sea: 'cloud', seaColor: 0xe8edf3, peak: [0x7e8796, 0xffffff], peakScale: 1.7, stars: false, scenery: 'peaks', dust: 0xffffff },
   night: { top: 0x040818, mid: 0x18264d, bot: 0x0a1028, sunCol: 0xc8d8ff, fog: [45, 190], hemi: [0x7f90c8, 0x10142a, 0.8], sun: [0xa8c0ff, 1.2],
-    cloud: [0x6d7aa3, 0x252e4e], cloudShade: [0x5f6b92, 0x1e2643], sea: 'cloud', seaColor: 0x2a3658, peak: [0x2a3552, 0x7c8bb0], peakScale: 1, stars: true, scenery: 'clouds', dust: 0x9fb4ff },
+    cloud: [0x6d7aa3, 0x252e4e], cloudShade: [0x5f6b92, 0x1e2643], sea: 'cloud', seaColor: 0x2a3658, peak: [0x2a3552, 0x7c8bb0], peakScale: 1, stars: true, scenery: 'clouds', dust: 0x9fb4ff, glowMines: true },
+  storm: { top: 0x1b2230, mid: 0x4b5569, bot: 0x2a3140, sunCol: 0x8a98b8, fog: [40, 175], hemi: [0xa6b0c6, 0x1e222b, 0.95], sun: [0xc4cce2, 1.3],
+    cloud: [0x6c7488, 0x262b38], cloudShade: [0x5c6478, 0x1f2430], sea: 'water', seaColor: 0x22384b, peak: [0x3a4252, 0x6a7488], peakScale: 0.8, stars: false, scenery: 'storm', dust: 0xc8d4ff, glowMines: true, lightning: true, waves: 1.9 },
 };
 const LEVELS = [
   { n: 1, name: 'Ocean', theme: 'ocean', target: 1500, boss: 'flanker' },
   { n: 2, name: 'Mountains', theme: 'mountains', target: 2500, boss: 'bomber' },
   { n: 3, name: 'Night', theme: 'night', target: 3500, boss: 'stealth' },
+  // the finale: one long straight, one huge boss
+  { n: 4, name: 'Storm', theme: 'storm', target: 0, bossDist: 45, boss: 'monster', straight: true },
 ];
 // bosses are original low-poly designs inspired by Russian aircraft
 const BOSSES = {
-  flanker: { name: 'Boss · Heavy fighter "Flanker"', hp: 8, gap: 30, y: 3.2 },
-  bomber: { name: 'Boss · Strategic bomber "Blackjack"', hp: 14, gap: 38, y: 4.4 },
-  stealth: { name: 'Final boss · Stealth fighter "Felon"', hp: 20, gap: 30, y: 3.4 },
+  flanker: { name: 'Boss · Heavy fighter "Flanker"', hp: 8, gap: 30, y: 3.2, clear: 6.6 },
+  bomber: { name: 'Boss · Strategic bomber "Blackjack"', hp: 14, gap: 38, y: 4.4, clear: 7.4 },
+  stealth: { name: 'Boss · Stealth fighter "Felon"', hp: 14, gap: 30, y: 3.4, clear: 6.6 },
+  monster: { name: 'Final boss · Ekranoplan "Sea Monster"', hp: 26, gap: 44, y: 3.8, clear: 8.6 },
 };
 
 // ============================================================ renderer / scene
@@ -254,6 +259,10 @@ const M = {
   stealth: std(0x4c535c, { roughness: 0.5, metalness: 0.4 }),
   stealthLight: std(0x6c737c, { roughness: 0.5, metalness: 0.4 }),
   goldGlass: new THREE.MeshStandardMaterial({ color: 0x806020, emissive: 0x3a2a08, metalness: 0.9, roughness: 0.2 }),
+  mineHalo: basic(0xff3030, { transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+  monster: std(0xb9c2c9, { roughness: 0.55, metalness: 0.3 }),
+  monsterDark: std(0x55606b, { roughness: 0.5, metalness: 0.4 }),
+  windowGlow: basic(0xffc56a),
   // loyal wingman
   wingman: std(0xb8c4cf, { roughness: 0.5, metalness: 0.3 }),
   wingDark: std(0x5c6773),
@@ -521,6 +530,50 @@ function makeStealth() {
   return root;
 }
 
+// final level: a giant wing-in-ground-effect craft with nose engines and missile tubes
+function makeMonster() {
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  const H = M.monster;
+  const D = M.monsterDark;
+  mesh(new THREE.CylinderGeometry(1.1, 1.2, 16, 12).rotateX(Math.PI / 2), H, 0, 0, 0, body).scale.y = 0.85;
+  mesh(new THREE.ConeGeometry(1.1, 3.2, 12).rotateX(-Math.PI / 2), H, 0, 0.1, -9.6, body).scale.y = 0.8;
+  mesh(new THREE.ConeGeometry(1.2, 2.6, 12).rotateX(Math.PI / 2), H, 0, 0, 9.3, body).scale.y = 0.7;
+  mesh(boxGeo(1.9, 0.5, 14), D, 0, -0.95, 0.4, body); // boat hull
+  mesh(boxGeo(1.2, 0.35, 1.6), M.glassDark, 0, 0.85, -7.6, body);
+  for (let i = 0; i < 7; i++) for (const sx of [-1, 1]) mesh(boxGeo(0.05, 0.18, 0.4), M.windowGlow, sx * 1.12, 0.25, -5.5 + i * 1.6, body);
+  // stubby wings with tip floats
+  mesh(plate([[1, -1], [6.2, 1.6], [6.2, 3.3], [1, 3.6]], 0.22).rotateX(Math.PI / 2), H, 0, -0.35, 0, body);
+  mesh(plate([[-1, -1], [-1, 3.6], [-6.2, 3.3], [-6.2, 1.6]], 0.22).rotateX(Math.PI / 2), H, 0, -0.35, 0, body);
+  for (const sx of [-1, 1]) mesh(boxGeo(0.7, 0.9, 3.2), D, sx * 6.2, -0.8, 2.4, body);
+  // forward pylons carrying the engines
+  mesh(plate([[0.8, -6.6], [4.0, -5.3], [4.0, -4.4], [0.8, -4.6]], 0.16).rotateX(Math.PI / 2), H, 0, 0.35, 0, body);
+  mesh(plate([[-0.8, -6.6], [-0.8, -4.6], [-4.0, -4.4], [-4.0, -5.3]], 0.16).rotateX(Math.PI / 2), H, 0, 0.35, 0, body);
+  const flame = new THREE.Group();
+  body.add(flame);
+  for (const sx of [-1, 1]) {
+    for (const ex of [1.5, 2.3, 3.1]) {
+      mesh(new THREE.CylinderGeometry(0.32, 0.3, 1.8, 10).rotateX(Math.PI / 2), D, sx * ex, 0.75, -5.6, body);
+      mesh(new THREE.ConeGeometry(0.24, 1.2, 8).rotateX(-Math.PI / 2), M.flameOuter, sx * ex, 0.75, -4.1, flame);
+    }
+  }
+  // missile launch tubes on the spine
+  for (const z of [-2.8, 0.2, 3.2]) for (const sx of [-1, 1]) {
+    const t = mesh(new THREE.CylinderGeometry(0.42, 0.42, 3.4, 10).rotateX(Math.PI / 2), D, sx * 0.55, 1.15, z, body);
+    t.rotation.x = 0.12;
+  }
+  // big T-tail
+  mesh(plate([[4.6, 0.8], [7.2, 5.6], [8.3, 5.6], [8.6, 0.8]], 0.22).rotateY(-Math.PI / 2), H, 0.11, 0, 0, body);
+  mesh(plate([[0.1, 6.6], [4.8, 7.9], [4.8, 8.6], [0.1, 8.4]], 0.16).rotateX(Math.PI / 2), H, 0, 5.4, 0, body);
+  mesh(plate([[-0.1, 6.6], [-0.1, 8.4], [-4.8, 8.6], [-4.8, 7.9]], 0.16).rotateX(Math.PI / 2), H, 0, 5.4, 0, body);
+  finStars(body, 7.2, 3.0, 0.75, 0.12, -0.14);
+  mesh(G.beacon, M.navRed, -6.2, 0, 2.4, body).scale.setScalar(2.5);
+  mesh(G.beacon, M.navGreen, 6.2, 0, 2.4, body).scale.setScalar(2.5);
+  mesh(G.beacon, M.mineLight, 0, 6.0, 7.6, body).scale.setScalar(2.5);
+  return root;
+}
+
 // ============================================================ loyal wingman drone
 function makeWingman() {
   const root = new THREE.Group();
@@ -678,7 +731,8 @@ function createStraight(P, dir, opts = {}) {
   const first = !!opts.first;
   const L = first ? 111 : randInt(17, 38) * 3;
   let corner;
-  if (dir === 0) corner = pick(['L', 'R', 'L', 'R', 'T']);
+  if (game.straightOnly) corner = 'S'; // no turns: the next straight carries straight on
+  else if (dir === 0) corner = pick(['L', 'R', 'L', 'R', 'T']);
   else corner = dir === 1 ? 'L' : 'R';
   const f = DIRV[dir];
   const r = DIRV[(dir + 1) % 4];
@@ -704,7 +758,7 @@ function difficulty() { return clamp((game.dist + game.diffOffset) / 4000, 0, 1)
 function populate(st) {
   const diff = difficulty();
   const end = st.L - 18;
-  const calm = !!game.boss; // during a boss fight the boss lays the mines
+  const calm = !!game.boss || game.straightOnly; // during a boss fight the boss lays the mines
   let s = st.first ? 38 : 6;
   for (;;) {
     s += rand(lerp(22, 11, diff), lerp(32, 18, diff)) * (calm ? 1.8 : 1);
@@ -799,6 +853,8 @@ function buildMine(st, ob, fromY = CRUISE) {
     sp.quaternion.setFromUnitVectors(_v.set(0, 1, 0), _v2.set(x, y, z).normalize());
   }
   st.mineLights.push(mesh(G.beacon, M.mineLight, 0, 0.45, -0.55, holder));
+  st.mineLights[st.mineLights.length - 1].scale.setScalar(1.5);
+  mesh(G.halo, M.mineHalo, 0, 0, 0, holder).scale.setScalar(1.45);
   st.group.add(holder);
   ob.meshes.push(holder);
   st.spinners.push({ m: core, sx: rand(-0.8, 0.8), sy: rand(0.5, 1.2) });
@@ -829,24 +885,8 @@ function island(parent, x, z) {
   mesh(G.disc, M.sand, x, -30.3, z, parent).scale.set(r * 1.3, 1, r * 1.3);
 }
 
-function build(st) {
-  const g = st.group;
+function buildCorner(st, g) {
   const L = st.L;
-
-  // no floor: the track is only floating edge lights and faint lane dashes
-  const marks = [];
-  for (let s = st.sStart; s < L - HALF - 0.01; s += TILE) marks.push(s + TILE / 2);
-  const bm = new THREE.InstancedMesh(G.bead, M.bead, marks.length * 2);
-  const dm = new THREE.InstancedMesh(G.dash, M.dash, marks.length * 2);
-  marks.forEach((c, i) => {
-    for (const [k, sx] of [[0, -1], [1, 1]]) {
-      _m4.makeTranslation(sx * 3.0, 0, -c); bm.setMatrixAt(i * 2 + k, _m4);
-      _m4.makeTranslation(sx * 1.0, 0, -c); dm.setMatrixAt(i * 2 + k, _m4);
-    }
-  });
-  g.add(bm, dm);
-
-  // corner: floating arrows, a low see-through barrier and a raised sign
   const turnSides = st.corner === 'T' ? [-1, 1] : [st.corner === 'L' ? -1 : 1];
   for (const sd of turnSides) {
     for (let k = 0; k < 2; k++) chevron(g, sd * (0.6 + k * 1.2), 0.03, -L, sd, M.warn, 1.3).rotation.x = -Math.PI / 2;
@@ -865,6 +905,32 @@ function build(st) {
     for (let k = 0; k < 3; k++) chevron(g, sd * (0.6 + k * 0.9), 4.6, -L - 3.1, sd, M.warn, 0.8);
   }
 
+}
+
+function build(st) {
+  const g = st.group;
+  const L = st.L;
+
+  // no floor: the track is only floating edge lights and faint lane dashes
+  const marks = [];
+  for (let s = st.sStart; s < L - HALF - 0.01; s += TILE) marks.push(s + TILE / 2);
+  const bm = new THREE.InstancedMesh(G.bead, M.bead, marks.length * 2);
+  const dm = new THREE.InstancedMesh(G.dash, M.dash, marks.length * 2);
+  marks.forEach((c, i) => {
+    for (const [k, sx] of [[0, -1], [1, 1]]) {
+      _m4.makeTranslation(sx * 3.0, 0, -c); bm.setMatrixAt(i * 2 + k, _m4);
+      _m4.makeTranslation(sx * 1.0, 0, -c); dm.setMatrixAt(i * 2 + k, _m4);
+    }
+  });
+  g.add(bm, dm);
+
+  if (st.corner === 'S') {
+    // no corner here: just keep the edge lights and lane dashes going
+    for (const z of [L - 1.5, L + 1.5]) for (const sx of [-1, 1]) {
+      mesh(G.bead, M.bead, sx * 3, 0, -z, g);
+      mesh(G.dash, M.dash, sx * 1.0, 0, -z, g);
+    }
+  } else buildCorner(st, g);
   // blinking nav lights: red on the left, green on the right
   for (let s = st.sStart + 6; s < L - 6; s += 12) {
     st.beacons.push(mesh(G.beacon, M.navRedL, -3.0, 0.25, -s, g));
@@ -925,6 +991,9 @@ function build(st) {
       else if (r < 0.8) cloud(g, sd * rand(13, 33), rand(-8, 10), -s, rand(2, 4), true);
       else if (r < 0.95) cloud(g, rand(-30, 30), rand(-22, -12), -s, rand(2.5, 4.5), true);
       else st.spinners.push({ m: balloon(g, sd * rand(15, 30), rand(-4, 12), -s), sx: 0, sy: rand(-0.1, 0.1) });
+    } else if (kind === 'storm') {
+      if (r < 0.55) cloud(g, sd * rand(13, 33), rand(-6, 14), -s, rand(3, 6), true);
+      else cloud(g, rand(-30, 30), rand(-24, -12), -s, rand(3, 5.5), true);
     } else if (kind === 'peaks') {
       if (r < 0.5) peak(g, sd * rand(14, 32), -s, rand(-4, 24));
       else if (r < 0.8) cloud(g, rand(-30, 30), rand(-30, -10), -s, rand(2.5, 5), true);
@@ -957,7 +1026,7 @@ function disposeStraight(st) {
 }
 
 function spawnNext(st) {
-  const nd = st.corner === 'L' ? (st.dir + 3) % 4 : (st.dir + 1) % 4;
+  const nd = st.corner === 'S' ? st.dir : st.corner === 'L' ? (st.dir + 3) % 4 : (st.dir + 1) % 4;
   st.next = createStraight(endPoint(st), nd);
   return st.next;
 }
@@ -1005,11 +1074,12 @@ const game = {
   trail: [], camYaw: 0, camY: 4, camPull: 0, nextMilestone: 500, ej: null,
   loopCd: 0, enemyT: 8, kills: 0,
   mode: 'endless', level: 0, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
-  levelStartScore: 0, speedBonus: 0, diffOffset: 0,
+  levelStartScore: 0, speedBonus: 0, diffOffset: 0, straightOnly: false, flash: 0, flashT: 3,
   best: store.get('starlane.best', 0), bank: store.get('starlane.bank', 0),
 };
 let campaign = store.get('wowf.campaign', { unlocked: 1, cleared: 0 });
 if (!campaign || typeof campaign.unlocked !== 'number') campaign = { unlocked: 1, cleared: 0 };
+campaign.unlocked = Math.max(campaign.unlocked, Math.min(LEVELS.length, (campaign.cleared || 0) + 1)); // new levels unlock for past winners
 
 // ============================================================ map themes
 let theme = THEMES.sky;
@@ -1035,6 +1105,47 @@ function applyTheme(id) {
   water.visible = t.sea === 'water';
   water.material.color.setHex(t.seaColor);
   dust.material.color.setHex(t.dust);
+  // mines glow red in the dark so they stay easy to see
+  M.mine.emissive.setHex(t.glowMines ? 0x6a0d0d : 0x000000);
+  M.spike.emissive.setHex(t.glowMines ? 0x4a1010 : 0x000000);
+  M.mineHalo.opacity = t.glowMines ? 0.75 : 0;
+  bolt.visible = false;
+}
+
+// lightning for the storm level: a flicker of light and a jagged bolt in the distance
+const FLASH_COL = new THREE.Color(0xe4ebff);
+const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints(new Array(10).fill(0).map(() => new THREE.Vector3())),
+  new THREE.LineBasicMaterial({ color: 0xffffff, fog: false }));
+bolt.visible = false;
+bolt.frustumCulled = false;
+scene.add(bolt);
+function updateLightning(dt) {
+  if (!theme.lightning) return;
+  game.flashT -= dt;
+  if (game.flashT <= 0) {
+    game.flash = 1;
+    game.flashT = rand(2.5, 6);
+    const pos = bolt.geometry.attributes.position;
+    const fx = -Math.sin(game.camYaw);
+    const fz = -Math.cos(game.camYaw);
+    const side = rand(-90, 90);
+    let x = camera.position.x + fx * 160 - fz * side;
+    let z = camera.position.z + fz * 160 + fx * side;
+    for (let i = 0; i < 10; i++) {
+      pos.setXYZ(i, x, 70 - i * 11, z);
+      x += rand(-7, 7); z += rand(-7, 7);
+    }
+    pos.needsUpdate = true;
+    setTimeout(() => sfx('thunder'), rand(200, 700));
+  }
+  game.flash = Math.max(0, game.flash - dt * 3.2);
+  const f = game.flash * (0.65 + 0.35 * Math.sin(game.time * 70));
+  hemi.intensity = theme.hemi[2] + f * 2.4;
+  sun.intensity = theme.sun[1] + f * 1.5;
+  const mid = sky.material.uniforms.mid.value.setHex(theme.mid).lerp(FLASH_COL, f * 0.45);
+  scene.background.copy(mid);
+  scene.fog.color.copy(mid);
+  bolt.visible = game.flash > 0.35;
 }
 
 function updateWater() {
@@ -1045,7 +1156,7 @@ function updateWater() {
   for (let i = 0; i < pos.count; i++) {
     const wx = pos.getX(i) + water.position.x;
     const wz = pos.getZ(i) + water.position.z;
-    pos.setY(i, Math.sin(wx * 0.12 + t * 1.1) * 0.7 + Math.cos(wz * 0.1 + t * 0.8) * 0.7);
+    pos.setY(i, (Math.sin(wx * 0.12 + t * 1.1) * 0.7 + Math.cos(wz * 0.1 + t * 0.8) * 0.7) * (theme.waves || 1));
   }
   pos.needsUpdate = true;
 }
@@ -1092,7 +1203,8 @@ function newGame(opts = {}) {
     loopCd: 0, enemyT: 8, kills: 0,
     mode, level, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
     score: opts.score || 0, levelStartScore: opts.score || 0,
-    speedBonus: level ? (level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
+    speedBonus: level ? Math.min(2, level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
+    straightOnly: !!(level && LEVELS[level - 1].straight), flash: 0, flashT: 3,
   });
   Object.assign(player, {
     s: 0, x: 0, y: 0, vy: 0, lane: 0, alt: CRUISE, air: false, slideT: 0, pendingTurn: 0, fireCd: 0,
@@ -1121,6 +1233,7 @@ function newGame(opts = {}) {
 function turnWindow() { return Math.max(14, game.speed * 0.9); }
 function inTurnWindow() {
   const st = player.st;
+  if (st.corner === 'S') return false;
   return player.s >= st.L - HALF - turnWindow() && player.s <= st.L + HALF;
 }
 
@@ -1157,6 +1270,16 @@ function executeTurn() {
   ensureAhead();
   game.score += 25 * game.mult;
   sfx('turn');
+}
+
+// straight-only levels: hop onto the next straight without turning
+function carryOn() {
+  const st = player.st;
+  player.s -= st.L;
+  passed.push(st);
+  while (passed.length > 2) disposeStraight(passed.shift());
+  player.st = st.next;
+  ensureAhead();
 }
 
 function changeLane(side) {
@@ -1206,7 +1329,7 @@ function actLoop() {
 }
 
 const targetX = (t) => (t.type === 'rock' ? t.lane * LANE_W : t.x);
-const targetY = (t) => (t.type === 'rock' ? CRUISE : t.y);
+const targetY = (t) => (t.type === 'rock' ? CRUISE : t.type === 'boss' ? t.liftY ?? t.y : t.y);
 
 function findTarget(fromS) {
   if (game.boss && !game.boss.dying) return game.boss;
@@ -1328,7 +1451,7 @@ function animateWingman(dt) {
 function spawnBoss() {
   const lv = LEVELS[game.level - 1];
   const def = BOSSES[lv.boss];
-  const m = lv.boss === 'flanker' ? makeFlankerBoss() : lv.boss === 'bomber' ? makeBomber() : makeStealth();
+  const m = lv.boss === 'flanker' ? makeFlankerBoss() : lv.boss === 'bomber' ? makeBomber() : lv.boss === 'monster' ? makeMonster() : makeStealth();
   scene.add(m);
   worldOf(player.st, player.s + 170, 0, def.y + 8, m.position);
   game.boss = {
@@ -1347,9 +1470,27 @@ function removeBoss() {
 }
 
 function placeBoss(dt, b) {
-  worldOf(player.st, player.s + b.gap, b.x, b.y + Math.sin(game.time * 1.6) * 0.25, _v);
+  // where the boss is drawn: follow the track round a corner once it is past it,
+  // and climb over gates, fences and corner barriers instead of flying through them.
+  // Gameplay (gap, lane, attacks, hit box) is unchanged.
+  let st = player.st;
+  let s = player.s + b.gap;
+  let afterTurn = false;
+  if (s > st.L && st.next) { afterTurn = st.corner !== 'S'; s -= st.L; st = st.next; }
+  let need = b.y;
+  if (!b.dying) {
+    for (const ob of st.obstacles) {
+      if (ob.smashed) continue;
+      if (ob.type === 'gate' && Math.abs(ob.s - s) < 9) need = Math.max(need, b.def.clear);
+      if (ob.type === 'fence' && Math.abs(ob.s - s) < 7) need = Math.max(need, 4.4);
+    }
+    // stay high around a turn: before the corner barrier and just after it
+    if ((st.corner !== 'S' && s > st.L - 10) || (afterTurn && s < 12)) need = Math.max(need, b.def.clear + 0.6);
+  }
+  b.liftY = b.dying ? b.y : lerp(b.liftY ?? b.y, need, damp(3.5, dt));
+  worldOf(st, s, b.x, b.liftY + Math.sin(game.time * 1.6) * 0.25, _v);
   b.mesh.position.lerp(_v, damp(b.dying ? 3 : 6, dt));
-  b.yaw = lerpAngle(b.yaw, yawOf(player.st.dir), damp(3, dt));
+  b.yaw = lerpAngle(b.yaw, yawOf(st.dir), damp(3, dt));
   b.mesh.rotation.y = b.yaw;
   if (!b.dying) { b.mesh.rotation.z = -b.bank; b.mesh.rotation.x = 0; }
   if (b.pulse > 0) { b.pulse -= dt; b.mesh.scale.setScalar(1 + Math.max(0, b.pulse) * 0.4); } else b.mesh.scale.setScalar(1);
@@ -1401,6 +1542,14 @@ function bossAttack(b, angry) {
   if (b.id === 'flanker') {
     if (b.attackN % 2) dropMine(b, b.lane); else bossGuns(b, 3);
     b.attackT = angry ? 1.2 : 1.7;
+  } else if (b.id === 'monster') {
+    const ratio = b.hp / b.maxHp;
+    const k = b.attackN % 4;
+    if (k === 0) bossGuns(b, ratio < 0.66 ? 5 : 4);
+    else if (k === 1) [-1, 0, 1].sort(() => Math.random() - 0.5).slice(0, 2).forEach((l) => dropMine(b, l));
+    else if (k === 2) { dropMine(b, player.lane); bossGuns(b, 3); }
+    else bossGuns(b, ratio < 0.33 ? 7 : 5);
+    b.attackT = ratio < 0.33 ? 0.9 : ratio < 0.66 ? 1.2 : 1.55;
   } else if (b.id === 'bomber') {
     // carpet of mines, never all three lanes
     const n = angry || Math.random() < 0.5 ? 2 : 1;
@@ -1411,17 +1560,23 @@ function bossAttack(b, angry) {
     if (k === 0) bossGuns(b, 5);
     else if (k === 1) [-1, 0, 1].sort(() => Math.random() - 0.5).slice(0, 2).forEach((l) => dropMine(b, l));
     else { bossGuns(b, 3); dropMine(b, player.lane); }
-    b.attackT = angry ? 0.95 : 1.35;
+    b.attackT = angry ? 1.15 : 1.6;
   }
 }
 
 function dropMine(b, lane) {
-  const st = player.st;
-  const s = b.s - 3;
-  if (s > st.L - 10 || s < player.s + 12) return;
+  let st = player.st;
+  let s = b.s - 3;
+  if (s < player.s + 12) return;
+  if (s > st.L - 10) {
+    if (st.corner !== 'S' || !st.next) return;
+    s -= st.L;
+    st = st.next;
+    if (s < st.sStart + 2 || s > st.L - 10) return;
+  }
   const ob = { type: 'rock', s, half: 0.9, lane, meshes: [] };
   st.obstacles.push(ob);
-  buildMine(st, ob, b.y - 0.6);
+  buildMine(st, ob, (b.liftY ?? b.y) - 0.6);
   sfx('drop');
 }
 
@@ -1454,6 +1609,9 @@ function hitBoss() {
     hud.toast(game.level === LEVELS.length ? 'Final boss destroyed!' : 'Boss destroyed!');
     sfx('boom');
     shake = 0.5;
+  } else if (b.id === 'monster') {
+    if (!b.phase2 && b.hp <= (b.maxHp * 2) / 3) { b.phase2 = true; hud.toast('Phase 2!'); }
+    if (!b.phase3 && b.hp <= b.maxHp / 3) { b.phase3 = true; b.angry = true; hud.toast('Final phase!'); }
   } else if (!b.angry && b.hp <= b.maxHp / 2) {
     b.angry = true;
     hud.toast('Boss damaged! It is getting angry');
@@ -1627,7 +1785,8 @@ function updatePlaying(dt) {
 
   // corners (the autopilot takes the turn while a beaten boss goes down)
   if (game.levelClear && !player.pendingTurn && inTurnWindow()) player.pendingTurn = st.corner === 'R' ? 1 : -1;
-  if (player.pendingTurn && player.s >= st.L - 1.0) executeTurn();
+  if (st.corner === 'S' && player.s >= st.L && st.next) carryOn();
+  else if (player.pendingTurn && player.s >= st.L - 1.0) executeTurn();
   else if (player.s > st.L + HALF - 0.7) { die('wall'); return; }
   updateTurnHint();
 
@@ -1646,7 +1805,8 @@ function updatePlaying(dt) {
   if (game.state !== 'playing') return;
   if (game.mode === 'campaign') {
     const lv = LEVELS[game.level - 1];
-    if (!game.boss && !game.bossDone && game.score - game.levelStartScore >= lv.target) spawnBoss();
+    const ready = lv.bossDist ? game.dist >= lv.bossDist : game.score - game.levelStartScore >= lv.target;
+    if (!game.boss && !game.bossDone && ready) spawnBoss();
     updateBoss(dt);
     if (game.state !== 'playing') return;
   }
@@ -1740,7 +1900,14 @@ function updateEnemies(dt, prevPlayerS) {
     }
     e.prevR = r;
     if (!onTrack || r < -25 || e.s < e.st.sStart - 10) { scene.remove(e.mesh); enemies.splice(i, 1); continue; }
-    worldOf(e.st, e.s, e.x, e.y + Math.sin(game.time * 3 + i) * 0.08, e.mesh.position);
+    let lift = 0;
+    for (const ob of e.st.obstacles) {
+      if (ob.smashed || Math.abs(ob.s - e.s) > 6) continue;
+      if (ob.type === 'gate') lift = Math.max(lift, 3.8);
+      else if (ob.type === 'fence') lift = Math.max(lift, 1.6);
+    }
+    e.visY = lerp(e.visY ?? e.y, e.y + lift, damp(5, dt));
+    worldOf(e.st, e.s, e.x, e.visY + Math.sin(game.time * 3 + i) * 0.08, e.mesh.position);
     e.mesh.rotation.set(0, yawOf(e.st.dir) + Math.PI, -e.bank);
   }
   updateBullets(dt, prevPlayerS);
@@ -1798,7 +1965,7 @@ function updateMissiles(dt) {
     }
     let dead = m.t > 1.8 || m.s > m.st.L + HALF + 2 || m.st.dead;
     const bo = game.boss;
-    if (!dead && bo && !bo.dying && bo.st === m.st && m.s >= bo.s - 3 && Math.abs(m.x - bo.x) < 3 && Math.abs(m.y - bo.y) < 2.6) {
+    if (!dead && bo && !bo.dying && bo.st === m.st && m.s >= bo.s - 3 && Math.abs(m.x - bo.x) < 3 && Math.abs(m.y - (bo.liftY ?? bo.y)) < 2.6) {
       hitBoss();
       dead = true;
     }
@@ -2026,6 +2193,7 @@ function animateDrone(dt) {
 
 function animateWorld(dt) {
   const t = game.time;
+  updateLightning(dt);
   _q.setFromEuler(_euler.set(0, t * 2.5, 0));
   const blink = Math.sin(t * 5) > 0;
   for (const st of activeStraights()) {
@@ -2176,6 +2344,7 @@ function sfx(name) {
     case 'click': tone(t, 900, 0.04, 'square', 0.05); break;
     case 'wingman': noise(t, 0.7, 0.3, 1200, 0.5); for (let i = 0; i < 5; i++) noise(t + 0.05 + i * 0.035, 0.04, 0.2, 2200, 1.2); tone(t, 520, 0.6, 'sawtooth', 0.05, 260, master, 1400); break;
     case 'hit': tone(t, 300, 0.12, 'square', 0.15, 120); noise(t, 0.15, 0.3, 900, 0.8); break;
+    case 'thunder': noise(t, 2.2, 0.5, 120, 0.4, 'lowpass'); noise(t + 0.05, 0.5, 0.35, 400, 0.6, 'lowpass'); break;
     case 'drop': tone(t, 700, 0.35, 'sine', 0.08, 250); break;
     case 'victory': [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(t + i * 0.12, f, 0.3, 'triangle', 0.15)); break;
     case 'chute': noise(t, 0.4, 0.3, 500, 0.4, 'lowpass'); break;
@@ -2289,7 +2458,7 @@ const hud = {
     show(ui.bossBar, !!b);
     if (camp && !b) {
       const lv = LEVELS[game.level - 1];
-      const pct = Math.min(100, ((game.score - game.levelStartScore) / lv.target) * 100);
+      const pct = Math.min(100, lv.bossDist ? (game.dist / lv.bossDist) * 100 : ((game.score - game.levelStartScore) / lv.target) * 100);
       ui.levelFill.style.width = `${pct}%`;
       this.set('lvl', ui.levelLbl, game.bossDone ? `Level ${lv.n} · ${lv.name} · clear!` : `Level ${lv.n} · ${lv.name} · boss at ${Math.floor(pct)}%`);
     }
@@ -2466,7 +2635,8 @@ function renderCampaign() {
     sw.style.background = `linear-gradient(${hex(t.top)}, ${hex(t.mid)} 55%, ${hex(t.sea === 'water' ? t.seaColor : t.peak[0])})`;
     const txt = document.createElement('div');
     const tt = document.createElement('div'); tt.className = 't'; tt.textContent = `Level ${lv.n} · ${lv.name}`;
-    const dd = document.createElement('div'); dd.className = 'd'; dd.textContent = `${fmt(lv.target)} points, then ${BOSSES[lv.boss].name.replace(/^.*· /, '')}`;
+    const dd = document.createElement('div'); dd.className = 'd';
+    dd.textContent = lv.bossDist ? `One long straight. Final boss: ${BOSSES[lv.boss].name.replace(/^.*· /, '')}` : `${fmt(lv.target)} points, then ${BOSSES[lv.boss].name.replace(/^.*· /, '')}`;
     txt.append(tt, dd);
     const btn = document.createElement('button');
     btn.className = 'mid-btn';
@@ -2705,4 +2875,4 @@ show(ui.loading, false);
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing };
+window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb };
