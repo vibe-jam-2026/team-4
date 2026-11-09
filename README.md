@@ -71,4 +71,4 @@ All music is original and synthesized live in the browser, with no audio files. 
 
 ### Trailer
 
-A 5-second vertical (9:16) trailer for reels and stories is in [media/trailer-reel.mp4](media/trailer-reel.mp4).
+A 5-second vertical (9:16) trailer for reels and stories is in [media/trailer-reel.mp4](media/trailer-reel.mp4). Its soundtrack is the game's own audio: the boss anthem and the in-game sound effects, rendered in sync with the picture.

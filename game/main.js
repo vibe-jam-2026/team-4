@@ -3024,4 +3024,10 @@ show(ui.loading, false);
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb };
+window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
+  // music control for recording trailers
+  music: {
+    want: setMusicTrack,
+    force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },
+  },
+};
