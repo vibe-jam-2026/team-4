@@ -47,7 +47,7 @@ A bar at the top shows how close you are to the boss. The boss flies ahead of yo
 
 ### Loyal wingmen
 
-You start every run (and every campaign level) with three loyal wingmen, shown at the top of the screen. If you are about to hit a mine, a wingman drone swoops in and shoots it down. When all three are used, the next mine you hit ends the run.
+You start every run (and every campaign level) with three loyal wingmen, shown at the top of the screen. If you are about to hit a mine, a wingman drone swoops in and shoots it down. Wingmen also fly into boss fire and block a whole burst for you. When all three are used, the next mine you hit ends the run.
 
 ### Leaderboard and hangar
 
@@ -64,6 +64,10 @@ python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. Opening `index.html` straight from disk does not work, because ES modules need to be served over HTTP.
+
+### Music
+
+All music is original and synthesized live in the browser, with no audio files. Normal flying has a driving synthwave cruise track. When a boss appears, the music crashes into a fast 80s rock-synth anthem, with power chords, gated drums and a soaring lead. It switches back once the boss is down. A recording of the switch is in [media/music-preview.mp3](media/music-preview.mp3).
 
 ### Trailer
 
