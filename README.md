@@ -64,3 +64,7 @@ python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. Opening `index.html` straight from disk does not work, because ES modules need to be served over HTTP.
+
+### Trailer
+
+A 5-second vertical (9:16) trailer for reels and stories is in [media/trailer-reel.mp4](media/trailer-reel.mp4).
