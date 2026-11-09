@@ -1,9 +1,9 @@
 # team-4
 Vibe Jam 2026 – lag 4
 
-## Sunstone Escape
+## Gripen Starlane
 
-An endless 3D temple runner that runs in the browser. You stole the Sunstone idol, and now the stone Guardian is chasing you across crumbling causeways above an abyss.
+An endless 3D space-lane flyer that runs in the browser. You fly a low-poly JAS 39 Gripen E along neon star lanes high above a ringed planet, chased by a hunter drone.
 
 Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions are still at [instructions.html](instructions.html).
 
@@ -12,18 +12,20 @@ Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
 | Turn at a corner / change lane | ← → (or A D) | swipe left / right |
-| Jump (gaps, fallen logs) | ↑, W or Space | swipe up |
-| Slide (low arches) | ↓ or S | swipe down |
+| Climb (over laser fences) | ↑ or W | swipe up |
+| Dive (under blast doors) | ↓ or S | swipe down |
+| Fire lasers (destroy asteroids) | Space, F or click | tap |
 | Pause / mute | P / M | buttons |
 
-Pressing left or right close to a corner turns you. Anywhere else it moves you one lane. At a T-junction you pick the way.
+Pressing left or right close to a corner banks you into the turn. The arrows on the barrier show which way to go. Anywhere else it moves you one lane. At a T-junction you pick the way.
 
 ### Rules
 
-- Collect coins. Power-ups: **Magnet** pulls in coins, **Sun Ward** smashes through obstacles, **Double Coins**.
-- Your speed and score multiplier go up the farther you run.
-- If you bump into a statue while changing lanes, you stumble and the Guardian closes in. Stumble twice in quick succession and it catches you.
-- Your best score and banked coins are saved in the browser.
+- Fly through energy rings to collect them. Power-ups: **Tractor Beam** pulls in rings, **Deflector** smashes through obstacles, **Double Rings**.
+- Asteroids block lanes: dodge them or shoot them for bonus points.
+- Your speed and score multiplier go up the farther you fly.
+- If you scrape an asteroid while changing lanes, the hunter drone closes in. Scrape twice in quick succession and it shoots you down.
+- Your best score and banked rings are saved in the browser.
 
 ### Running locally
 

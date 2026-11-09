@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#2c1d14">
-<title>Sunstone Escape</title>
+<meta name="theme-color" content="#070a1c">
+<title>Gripen Starlane</title>
 <link rel="stylesheet" href="game/style.css">
 </head>
 <body>
-<canvas id="game" aria-label="Sunstone Escape game"></canvas>
+<canvas id="game" aria-label="Gripen Starlane game"></canvas>
 
 <div id="hud" class="hidden">
   <div class="hud-left">
@@ -25,15 +25,15 @@
 
 <div id="menu" class="screen">
   <div class="panel">
-    <div class="kicker">An endless temple run</div>
-    <h1>Sunstone<br>Escape</h1>
-    <p class="tag">You took the Sunstone idol. The Guardian woke up. Run!</p>
-    <button id="playBtn" class="big-btn">Run</button>
-    <div class="best">Best: <b id="bestMenu">0</b> · Coins banked: <b id="bankMenu">0</b></div>
+    <div class="kicker">JAS 39 Gripen E · endless space run</div>
+    <h1>Gripen<br>Starlane</h1>
+    <p class="tag">Fly the star lanes, collect energy rings and outrun the hunter drone.</p>
+    <button id="playBtn" class="big-btn">Launch</button>
+    <div class="best">Best: <b id="bestMenu">0</b> · Rings banked: <b id="bankMenu">0</b></div>
     <div class="controls">
       <div><kbd>←</kbd><kbd>→</kbd> turn at corners · change lanes</div>
-      <div><kbd>↑</kbd> / <kbd>Space</kbd> jump &nbsp; <kbd>↓</kbd> slide</div>
-      <div class="touch-only">Phone: swipe left / right / up / down</div>
+      <div><kbd>↑</kbd> climb &nbsp; <kbd>↓</kbd> dive &nbsp; <kbd>Space</kbd> fire</div>
+      <div class="touch-only">Phone: swipe to steer, climb and dive · tap to fire</div>
       <div class="dim"><kbd>P</kbd> pause · <kbd>M</kbd> mute</div>
     </div>
   </div>
@@ -49,15 +49,15 @@
 
 <div id="over" class="screen hidden">
   <div class="panel">
-    <div class="kicker" id="deathMsg">The Guardian got you</div>
-    <h2>Run over</h2>
+    <div class="kicker" id="deathMsg">Mission over</div>
+    <h2>Shot down</h2>
     <div class="stats">
       <div><span>Score</span><b id="finalScore">0</b></div>
       <div><span>Distance</span><b id="finalDist">0 m</b></div>
-      <div><span>Coins</span><b id="finalCoins">0</b></div>
+      <div><span>Rings</span><b id="finalCoins">0</b></div>
     </div>
-    <div class="best" id="newBest">Best: <b id="bestOver">0</b></div>
-    <button id="againBtn" class="big-btn">Run again</button>
+    <div class="best" id="newBest">Best: <b>0</b></div>
+    <button id="againBtn" class="big-btn">Fly again</button>
     <button id="menuBtn" class="link-btn">Menu</button>
   </div>
 </div>
