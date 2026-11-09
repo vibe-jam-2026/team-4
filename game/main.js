@@ -51,6 +51,28 @@ const SKINS = [
   { id: 'brazil', name: 'Brazil', price: 150, c: [0x009c3b, 0x007a2e, 0xffdf00, 0x002776] },
 ];
 const LB_KEY = 'wowf.leaderboard';
+const WINGMEN = 3;         // loyal wingman saves per run (or per level)
+const THEMES = {
+  sky: { top: 0x2f6fd0, mid: 0xc4def6, bot: 0xf4f8ff, sunCol: 0xfff2d0, fog: [70, 250], hemi: [0xe2f0ff, 0x8a9cb8, 1.4], sun: [0xfff3dd, 2.4],
+    cloud: [0xffffff, 0x8796a8], cloudShade: [0xf0f5fb, 0x7a8a9e], sea: 'cloud', seaColor: 0xffffff, peak: [0x9db3d0, 0xffffff], peakScale: 1, stars: false, scenery: 'clouds', dust: 0xffffff },
+  ocean: { top: 0x1f6fd8, mid: 0xbfe3f7, bot: 0x2b7fb8, sunCol: 0xfff4d6, fog: [80, 260], hemi: [0xe8f6ff, 0x3a6f95, 1.45], sun: [0xfff6e0, 2.5],
+    cloud: [0xffffff, 0x8fa0b4], cloudShade: [0xf3f7fb, 0x8394a8], sea: 'water', seaColor: 0x1f72ad, peak: [0x7f9fb8, 0xeaf2fa], peakScale: 0.6, stars: false, scenery: 'islands', dust: 0xffffff },
+  mountains: { top: 0x4f7fc0, mid: 0xd3e0ec, bot: 0xe9eef4, sunCol: 0xfff0d8, fog: [60, 230], hemi: [0xe6eef8, 0x6a7280, 1.35], sun: [0xfff0dc, 2.3],
+    cloud: [0xf4f6f9, 0x7c8796], cloudShade: [0xe6eaf0, 0x6e7988], sea: 'cloud', seaColor: 0xe8edf3, peak: [0x7e8796, 0xffffff], peakScale: 1.7, stars: false, scenery: 'peaks', dust: 0xffffff },
+  night: { top: 0x040818, mid: 0x18264d, bot: 0x0a1028, sunCol: 0xc8d8ff, fog: [45, 190], hemi: [0x7f90c8, 0x10142a, 0.8], sun: [0xa8c0ff, 1.2],
+    cloud: [0x6d7aa3, 0x252e4e], cloudShade: [0x5f6b92, 0x1e2643], sea: 'cloud', seaColor: 0x2a3658, peak: [0x2a3552, 0x7c8bb0], peakScale: 1, stars: true, scenery: 'clouds', dust: 0x9fb4ff },
+};
+const LEVELS = [
+  { n: 1, name: 'Ocean', theme: 'ocean', target: 1500, boss: 'flanker' },
+  { n: 2, name: 'Mountains', theme: 'mountains', target: 2500, boss: 'bomber' },
+  { n: 3, name: 'Night', theme: 'night', target: 3500, boss: 'stealth' },
+];
+// bosses are original low-poly designs inspired by Russian aircraft
+const BOSSES = {
+  flanker: { name: 'Boss · Heavy fighter "Flanker"', hp: 8, gap: 30, y: 3.2 },
+  bomber: { name: 'Boss · Strategic bomber "Blackjack"', hp: 14, gap: 38, y: 4.4 },
+  stealth: { name: 'Final boss · Stealth fighter "Felon"', hp: 20, gap: 30, y: 3.4 },
+};
 
 // ============================================================ renderer / scene
 const canvas = document.getElementById('game');
@@ -65,7 +87,7 @@ scene.fog = new THREE.Fog(HORIZON, 70, 250);
 
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 700);
 
-// Background: sky gradient with sun, distant mountain peaks. Follows the camera.
+// Background: sky gradient with sun (or moon), distant peaks and stars. Follows the camera.
 const SUN_DIR = new THREE.Vector3(0.4, 0.45, -1).normalize();
 const skyGroup = new THREE.Group();
 scene.add(skyGroup);
@@ -94,26 +116,43 @@ const sky = new THREE.Mesh(
 );
 sky.renderOrder = -2;
 skyGroup.add(sky);
-{
-  const rockMat = new THREE.MeshLambertMaterial({ color: 0x9db3d0, flatShading: true, fog: false });
-  const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, fog: false });
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + rand(-0.15, 0.15);
-    const r = rand(70, 120);
-    const h = rand(90, 160);
-    const x = Math.cos(a) * 440;
-    const z = Math.sin(a) * 440;
-    const base = -75;
-    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), rockMat);
-    m.position.set(x, base + h / 2, z);
-    m.rotation.y = rand(0, 3);
-    skyGroup.add(m);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.32, h * 0.32, 7), snowMat);
-    cap.position.set(x, base + h - h * 0.16 + 0.5, z);
-    cap.rotation.y = m.rotation.y;
-    skyGroup.add(cap);
-  }
+const peakRock = new THREE.MeshLambertMaterial({ color: 0x9db3d0, flatShading: true, fog: false });
+const peakSnow = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, fog: false });
+const peaks = new THREE.Group();
+skyGroup.add(peaks);
+for (let i = 0; i < 14; i++) {
+  const a = (i / 14) * Math.PI * 2 + rand(-0.15, 0.15);
+  const r = rand(70, 120);
+  const h = rand(90, 160);
+  const x = Math.cos(a) * 440;
+  const z = Math.sin(a) * 440;
+  const base = -75;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), peakRock);
+  m.position.set(x, base + h / 2, z);
+  m.rotation.y = rand(0, 3);
+  peaks.add(m);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.32, h * 0.32, 7), peakSnow);
+  cap.position.set(x, base + h - h * 0.16 + 0.5, z);
+  cap.rotation.y = m.rotation.y;
+  peaks.add(cap);
 }
+const stars = (() => {
+  const n = 1600;
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = Math.random() * 0.95 + 0.05;
+    const t = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(1 - u * u) * 480;
+    pos[i * 3] = Math.cos(t) * r; pos[i * 3 + 1] = u * 480; pos[i * 3 + 2] = Math.sin(t) * r;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: false, fog: false, depthWrite: false }));
+  p.renderOrder = -1;
+  p.visible = false;
+  return p;
+})();
+skyGroup.add(stars);
 
 // sea of clouds far below the track
 const cloudSea = new THREE.Mesh(
@@ -122,8 +161,18 @@ const cloudSea = new THREE.Mesh(
 );
 cloudSea.position.y = -42;
 scene.add(cloudSea);
+// ...or an ocean with rolling low-poly waves
+const WATER_CELL = 1400 / 56;
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(1400, 1400, 56, 56).rotateX(-Math.PI / 2),
+  new THREE.MeshStandardMaterial({ color: 0x1f72ad, roughness: 0.35, metalness: 0.15, flatShading: true }),
+);
+water.position.y = -30;
+water.visible = false;
+scene.add(water);
 
-scene.add(new THREE.HemisphereLight(0xe2f0ff, 0x8a9cb8, 1.4));
+const hemi = new THREE.HemisphereLight(0xe2f0ff, 0x8a9cb8, 1.4);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff3dd, 2.4);
 scene.add(sun, sun.target);
 
@@ -195,6 +244,20 @@ const M = {
   bubble: basic(0x3fe0c5, { transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending }),
   spark: basic(0xffc060, { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   smoke: basic(0xe8ecf0, { transparent: true, depthWrite: false }),
+  // themed scenery
+  grass: std(0x4f9a44),
+  sand: std(0xe8d39a),
+  rockPeak: new THREE.MeshLambertMaterial({ color: 0x7e8796, flatShading: true }),
+  snowPeak: new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
+  // bosses
+  bossWhite: std(0xeef0f2, { roughness: 0.5 }),
+  stealth: std(0x4c535c, { roughness: 0.5, metalness: 0.4 }),
+  stealthLight: std(0x6c737c, { roughness: 0.5, metalness: 0.4 }),
+  goldGlass: new THREE.MeshStandardMaterial({ color: 0x806020, emissive: 0x3a2a08, metalness: 0.9, roughness: 0.2 }),
+  // loyal wingman
+  wingman: std(0xb8c4cf, { roughness: 0.5, metalness: 0.3 }),
+  wingDark: std(0x5c6773),
+  wingStripe: basic(0x3fa0ff),
 };
 
 const geoCache = new Map();
@@ -219,6 +282,8 @@ const G = {
   beacon: new THREE.SphereGeometry(0.14, 8, 6),
   envelope: new THREE.SphereGeometry(2.2, 12, 10),
   tracer: new THREE.BoxGeometry(0.08, 0.08, 1.4),
+  cone: new THREE.ConeGeometry(1, 1, 7),
+  disc: new THREE.CylinderGeometry(1, 1, 1, 14),
 };
 
 const _m4 = new THREE.Matrix4();
@@ -365,6 +430,118 @@ function makeBandit() {
 }
 const BANDIT = makeBandit();
 
+// ============================================================ bosses (original designs inspired by Russian aircraft)
+function finStars(parent, z, y, r, xR, xL) {
+  const w = plate(starPoints(r * 1.25), 0.02).rotateY(Math.PI / 2);
+  const red = plate(starPoints(r), 0.02).rotateY(Math.PI / 2);
+  mesh(w, M.starWhite, xR, y, z, parent);
+  mesh(red, M.starRed, xR + 0.015, y, z, parent);
+  mesh(w, M.starWhite, xL, y, z, parent);
+  mesh(red, M.starRed, xL - 0.015, y, z, parent);
+}
+
+// level 1: a heavy twin-tail fighter, a scaled-up bandit loaded with missiles
+function makeFlankerBoss() {
+  const root = new THREE.Group();
+  const b = BANDIT.clone();
+  b.scale.setScalar(1.9);
+  root.add(b);
+  for (const [x, z] of [[-1.5, 0.2], [-2.5, 0.7], [1.5, 0.2], [2.5, 0.7]]) {
+    const m = makeMissile();
+    m.scale.setScalar(1.7);
+    m.position.set(x, -0.35, z);
+    root.add(m);
+  }
+  return root;
+}
+
+// level 2: a white swing-wing strategic bomber with four engines
+function makeBomber() {
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  const W = M.bossWhite;
+  const D = M.banditDark;
+  mesh(new THREE.CylinderGeometry(0.6, 0.62, 9, 12).rotateX(Math.PI / 2), W, 0, 0, 0, body).scale.y = 0.85;
+  mesh(new THREE.ConeGeometry(0.6, 2.6, 12).rotateX(-Math.PI / 2), W, 0, 0.05, -5.8, body).scale.y = 0.8;
+  mesh(new THREE.ConeGeometry(0.6, 1.8, 12).rotateX(Math.PI / 2), W, 0, 0, 5.4, body).scale.y = 0.7;
+  mesh(new THREE.SphereGeometry(0.4, 12, 8), M.glassDark, 0, 0.42, -4.6, body).scale.set(1, 0.6, 2);
+  mesh(plate([[0.5, -2.6], [1.8, -1.4], [6.4, 2.4], [6.4, 2.9], [1.6, 1.4], [0.5, 1.6]], 0.12).rotateX(Math.PI / 2), W, 0, -0.1, 0, body);
+  mesh(plate([[-0.5, -2.6], [-0.5, 1.6], [-1.6, 1.4], [-6.4, 2.9], [-6.4, 2.4], [-1.8, -1.4]], 0.12).rotateX(Math.PI / 2), W, 0, -0.1, 0, body);
+  const flame = new THREE.Group();
+  body.add(flame);
+  for (const s of [-1, 1]) {
+    mesh(boxGeo(1.4, 0.7, 3.4), W, s * 1.6, -0.6, 1.8, body);
+    for (const k of [-0.35, 0.35]) {
+      mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.4, 10).rotateX(Math.PI / 2), D, s * 1.6 + k, -0.6, 3.6, body);
+      mesh(new THREE.ConeGeometry(0.24, 1.4, 8).rotateX(-Math.PI / 2), M.flameOuter, s * 1.6 + k, -0.6, 4.4, flame);
+    }
+  }
+  mesh(plate([[2.2, 0.4], [4.4, 3.4], [5.4, 3.4], [5.6, 0.4]], 0.12).rotateY(-Math.PI / 2), W, 0.06, 0.2, 0, body);
+  mesh(plate([[0.1, 3.8], [2.6, 4.9], [2.6, 5.3], [0.1, 5.1]], 0.08).rotateX(Math.PI / 2), W, 0, 2.2, 0, body);
+  mesh(plate([[-0.1, 3.8], [-0.1, 5.1], [-2.6, 5.3], [-2.6, 4.9]], 0.08).rotateX(Math.PI / 2), W, 0, 2.2, 0, body);
+  finStars(body, -4.6, 1.6, 0.5, 0.065, -0.085);
+  mesh(G.beacon, M.navRed, -6.4, -0.05, 2.65, body).scale.setScalar(2);
+  mesh(G.beacon, M.navGreen, 6.4, -0.05, 2.65, body).scale.setScalar(2);
+  return root;
+}
+
+// level 3: a dark angular stealth fighter with canted fins
+function makeStealth() {
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  body.scale.setScalar(1.9);
+  root.add(body);
+  const S = M.stealth;
+  const L = M.stealthLight;
+  mesh(new THREE.CylinderGeometry(0.5, 0.55, 4.2, 6).rotateX(Math.PI / 2), S, 0, 0, 0.2, body).scale.set(1.5, 0.45, 1);
+  mesh(new THREE.ConeGeometry(0.5, 1.8, 6).rotateX(-Math.PI / 2), S, 0, 0.02, -2.9, body).scale.set(1.1, 0.5, 1);
+  mesh(new THREE.SphereGeometry(0.22, 12, 8), M.goldGlass, 0, 0.24, -1.9, body).scale.set(0.8, 0.7, 2.4);
+  mesh(plate([[0.6, -1.6], [1.0, -1.0], [3.2, 1.2], [3.2, 1.7], [0.8, 2.0]], 0.06).rotateX(Math.PI / 2), S, 0, -0.02, 0, body);
+  mesh(plate([[-0.6, -1.6], [-0.8, 2.0], [-3.2, 1.7], [-3.2, 1.2], [-1.0, -1.0]], 0.06).rotateX(Math.PI / 2), S, 0, -0.02, 0, body);
+  mesh(plate([[0.45, -2.3], [1.05, -1.5], [0.6, -1.4]], 0.04).rotateX(Math.PI / 2), L, 0, 0.02, 0, body);
+  mesh(plate([[-0.45, -2.3], [-0.6, -1.4], [-1.05, -1.5]], 0.04).rotateX(Math.PI / 2), L, 0, 0.02, 0, body);
+  mesh(plate([[0.9, 1.9], [1.9, 2.5], [1.9, 2.75], [0.9, 2.7]], 0.05).rotateX(Math.PI / 2), S, 0, -0.04, 0, body);
+  mesh(plate([[-0.9, 1.9], [-0.9, 2.7], [-1.9, 2.75], [-1.9, 2.5]], 0.05).rotateX(Math.PI / 2), S, 0, -0.04, 0, body);
+  const flame = new THREE.Group();
+  body.add(flame);
+  for (const s of [-1, 1]) {
+    mesh(new THREE.CylinderGeometry(0.26, 0.28, 1.8, 10).rotateX(Math.PI / 2), L, s * 0.62, -0.1, 1.6, body);
+    mesh(new THREE.CylinderGeometry(0.24, 0.2, 0.35, 10).rotateX(Math.PI / 2), M.banditDark, s * 0.62, -0.1, 2.65, body);
+    mesh(new THREE.ConeGeometry(0.2, 1.0, 8).rotateX(-Math.PI / 2), M.flameOuter, s * 0.62, -0.1, 3.3, flame);
+    const fin = mesh(plate([[1.1, 0.1], [1.9, 0.95], [2.35, 0.95], [2.55, 0.1]], 0.05).rotateY(-Math.PI / 2), S, s * 0.72 + 0.025, 0.12, 0, body);
+    fin.rotation.z = -s * 0.5;
+    const out = s > 0 ? 0.01 : -0.08;
+    mesh(plate(starPoints(0.2), 0.02).rotateY(Math.PI / 2), M.starWhite, out, 0.5, 1.95, fin);
+    mesh(plate(starPoints(0.16), 0.02).rotateY(Math.PI / 2), M.starRed, out + (s > 0 ? 0.015 : -0.015), 0.5, 1.95, fin);
+  }
+  mesh(G.beacon, M.navRed, -3.2, 0, 1.45, body);
+  mesh(G.beacon, M.navGreen, 3.2, 0, 1.45, body);
+  mesh(boxGeo(0.9, 0.04, 0.05), M.railRed, 0, 0.05, -3.6, body); // glowing intake edge
+  return root;
+}
+
+// ============================================================ loyal wingman drone
+function makeWingman() {
+  const root = new THREE.Group();
+  root.rotation.order = 'YXZ';
+  const body = new THREE.Group();
+  body.scale.setScalar(0.8);
+  root.add(body);
+  mesh(new THREE.CylinderGeometry(0.28, 0.32, 2.8, 8).rotateX(Math.PI / 2), M.wingman, 0, 0, 0, body).scale.y = 0.7;
+  mesh(new THREE.ConeGeometry(0.28, 1.2, 8).rotateX(-Math.PI / 2), M.wingman, 0, 0, -2.0, body).scale.y = 0.7;
+  mesh(boxGeo(0.4, 0.22, 1.0), M.wingDark, 0, 0.2, -0.6, body);
+  mesh(boxGeo(0.06, 0.03, 2.6), M.wingStripe, 0, 0.21, 0.1, body);
+  mesh(plate([[0.2, -0.8], [2.0, 0.9], [2.0, 1.15], [0.2, 1.3]], 0.05).rotateX(Math.PI / 2), M.wingman, 0, -0.03, 0, body);
+  mesh(plate([[-0.2, -0.8], [-0.2, 1.3], [-2.0, 1.15], [-2.0, 0.9]], 0.05).rotateX(Math.PI / 2), M.wingman, 0, -0.03, 0, body);
+  for (const s of [-1, 1]) {
+    const fin = mesh(plate([[0.7, 0.1], [1.2, 0.8], [1.45, 0.8], [1.55, 0.1]], 0.04).rotateY(-Math.PI / 2), M.wingDark, s * 0.25, 0.05, 0, body);
+    fin.rotation.z = -s * 0.65;
+  }
+  mesh(new THREE.ConeGeometry(0.18, 1.0, 8).rotateX(-Math.PI / 2), M.flameOuter, 0, 0, 1.9, body);
+  return root;
+}
+
 // ============================================================ ejection seat, pilot and parachute
 function makeEjection() {
   const seatG = new THREE.Group();
@@ -465,6 +642,13 @@ looseCanopy.visible = false;
 scene.add(looseCanopy);
 const drone = makeDrone();
 scene.add(drone.root);
+const wingMesh = makeWingman();
+wingMesh.visible = false;
+scene.add(wingMesh);
+const beam = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1), M.tracer);
+beam.visible = false;
+scene.add(beam);
+const wing = { active: false, t: 0, side: 1, target: new THREE.Vector3() };
 
 // ============================================================ skins
 let ownedSkins = store.get('wowf.skins', ['default']);
@@ -502,7 +686,7 @@ function createStraight(P, dir, opts = {}) {
     P: { x: P.x, z: P.z }, dir, L, corner, first,
     fx: f[0], fz: f[1], rx: r[0], rz: r[1],
     sStart: first ? -15 : HALF,
-    obstacles: [], coins: [], powers: [], beacons: [], spinners: [], mineLights: [],
+    obstacles: [], coins: [], powers: [], beacons: [], spinners: [], mineLights: [], drops: [],
     next: null, armL: null, armR: null, dead: false,
     group: new THREE.Group(), coinMesh: null,
   };
@@ -515,17 +699,18 @@ function createStraight(P, dir, opts = {}) {
   return st;
 }
 
-function difficulty() { return clamp(game.dist / 4000, 0, 1); }
+function difficulty() { return clamp((game.dist + game.diffOffset) / 4000, 0, 1); }
 
 function populate(st) {
   const diff = difficulty();
   const end = st.L - 18;
+  const calm = !!game.boss; // during a boss fight the boss lays the mines
   let s = st.first ? 38 : 6;
   for (;;) {
-    s += rand(lerp(22, 11, diff), lerp(32, 18, diff));
+    s += rand(lerp(22, 11, diff), lerp(32, 18, diff)) * (calm ? 1.8 : 1);
     if (s > end) break;
     const r = Math.random();
-    const type = r < 0.3 ? 'fence' : r < 0.58 ? 'gate' : 'rock';
+    const type = calm ? (r < 0.5 ? 'fence' : 'gate') : r < 0.3 ? 'fence' : r < 0.58 ? 'gate' : 'rock';
     if (type === 'rock') {
       const lanes = [-1, 0, 1].sort(() => Math.random() - 0.5);
       const n = Math.random() < 0.35 + 0.4 * diff ? 2 : 1;
@@ -602,6 +787,48 @@ function balloon(parent, x, y, z) {
   return g;
 }
 
+function buildMine(st, ob, fromY = CRUISE) {
+  const holder = new THREE.Group();
+  holder.position.set(ob.lane * LANE_W, fromY, -ob.s);
+  const core = new THREE.Group();
+  holder.add(core);
+  mesh(G.mine, M.mine, 0, 0, 0, core);
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.7, 0], [-0.7, -0.7, 0]];
+  for (const [x, y, z] of dirs) {
+    const sp = mesh(G.spike, M.spike, x * 0.78, y * 0.78, z * 0.78, core);
+    sp.quaternion.setFromUnitVectors(_v.set(0, 1, 0), _v2.set(x, y, z).normalize());
+  }
+  st.mineLights.push(mesh(G.beacon, M.mineLight, 0, 0.45, -0.55, holder));
+  st.group.add(holder);
+  ob.meshes.push(holder);
+  st.spinners.push({ m: core, sx: rand(-0.8, 0.8), sy: rand(0.5, 1.2) });
+  if (fromY !== CRUISE) st.drops.push(holder);
+}
+
+function peak(parent, x, z, top) {
+  const r = Math.min(rand(8, 13), Math.abs(x) - 5);
+  const h = top + 70;
+  const ry = rand(0, 3);
+  const m = mesh(G.cone, M.rockPeak, x, top - h / 2, z, parent);
+  m.scale.set(r, h, r);
+  m.rotation.y = ry;
+  if (top > 3) {
+    const hc = h * 0.16;
+    const c = mesh(G.cone, M.snowPeak, x, top - hc / 2 + 0.05, z, parent);
+    c.scale.set(r * 0.165, hc, r * 0.165);
+    c.rotation.y = ry;
+  }
+}
+
+function island(parent, x, z) {
+  const r = rand(6, 14);
+  const h = rand(5, 15);
+  const m = mesh(G.cone, M.grass, x, -30 + h / 2, z, parent);
+  m.scale.set(r, h, r);
+  m.rotation.y = rand(0, 3);
+  mesh(G.disc, M.sand, x, -30.3, z, parent).scale.set(r * 1.3, 1, r * 1.3);
+}
+
 function build(st) {
   const g = st.group;
   const L = st.L;
@@ -662,20 +889,7 @@ function build(st) {
       }
       ob.meshes.push(mesh(boxGeo(PATH_W, 0.05, 0.05), M.railRed, 0, 0.98, -ob.s - 0.24, g));
     } else if (ob.type === 'rock') {
-      const holder = new THREE.Group();
-      holder.position.set(ob.lane * LANE_W, CRUISE, -ob.s);
-      const core = new THREE.Group();
-      holder.add(core);
-      mesh(G.mine, M.mine, 0, 0, 0, core);
-      const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1], [0.7, 0.7, 0], [-0.7, -0.7, 0]];
-      for (const [x, y, z] of dirs) {
-        const sp = mesh(G.spike, M.spike, x * 0.78, y * 0.78, z * 0.78, core);
-        sp.quaternion.setFromUnitVectors(_v.set(0, 1, 0), _v2.set(x, y, z).normalize());
-      }
-      st.mineLights.push(mesh(G.beacon, M.mineLight, 0, 0.45, -0.55, holder));
-      g.add(holder);
-      ob.meshes.push(holder);
-      st.spinners.push({ m: core, sx: rand(-0.8, 0.8), sy: rand(0.5, 1.2) });
+      buildMine(st, ob);
     }
   }
 
@@ -699,20 +913,28 @@ function build(st) {
     p.mesh = holder;
   }
 
-  // scenery: clouds below and beside the track, the odd hot-air balloon
+  // scenery depends on the map: clouds, islands on the ocean, or peaks in the mountains
   const n = Math.floor(st.L / 8);
+  const kind = theme.scenery;
   for (let i = 0; i < n; i++) {
     const s = rand(14, Math.max(16, L - 14));
     const r = Math.random();
-    if (r < 0.45) {
+    const sd = Math.random() < 0.5 ? -1 : 1;
+    if (kind === 'islands') {
+      if (r < 0.35) island(g, rand(-45, 45), -s);
+      else if (r < 0.8) cloud(g, sd * rand(13, 33), rand(-8, 10), -s, rand(2, 4), true);
+      else if (r < 0.95) cloud(g, rand(-30, 30), rand(-22, -12), -s, rand(2.5, 4.5), true);
+      else st.spinners.push({ m: balloon(g, sd * rand(15, 30), rand(-4, 12), -s), sx: 0, sy: rand(-0.1, 0.1) });
+    } else if (kind === 'peaks') {
+      if (r < 0.5) peak(g, sd * rand(14, 32), -s, rand(-4, 24));
+      else if (r < 0.8) cloud(g, rand(-30, 30), rand(-30, -10), -s, rand(2.5, 5), true);
+      else cloud(g, sd * rand(13, 33), rand(-10, 6), -s, rand(2, 3.5), true);
+    } else if (r < 0.45) {
       cloud(g, rand(-30, 30), rand(-30, -10), -s, rand(2.5, 5), true);
     } else if (r < 0.92) {
-      const sd = Math.random() < 0.5 ? -1 : 1;
       cloud(g, sd * rand(13, 33), rand(-12, 10), -s, rand(2, 4.5), true);
     } else {
-      const sd = Math.random() < 0.5 ? -1 : 1;
-      const b = balloon(g, sd * rand(15, 30), rand(-4, 12), -s);
-      st.spinners.push({ m: b, sx: 0, sy: rand(-0.1, 0.1) });
+      st.spinners.push({ m: balloon(g, sd * rand(15, 30), rand(-4, 12), -s), sx: 0, sy: rand(-0.1, 0.1) });
     }
   }
 
@@ -782,8 +1004,51 @@ const game = {
   chaseGap: 12, chaseHold: 0, stumbleT: 0, deathT: 0, deathKind: '', time: 0,
   trail: [], camYaw: 0, camY: 4, camPull: 0, nextMilestone: 500, ej: null,
   loopCd: 0, enemyT: 8, kills: 0,
+  mode: 'endless', level: 0, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
+  levelStartScore: 0, speedBonus: 0, diffOffset: 0,
   best: store.get('starlane.best', 0), bank: store.get('starlane.bank', 0),
 };
+let campaign = store.get('wowf.campaign', { unlocked: 1, cleared: 0 });
+if (!campaign || typeof campaign.unlocked !== 'number') campaign = { unlocked: 1, cleared: 0 };
+
+// ============================================================ map themes
+let theme = THEMES.sky;
+function applyTheme(id) {
+  theme = THEMES[id] || THEMES.sky;
+  const t = theme;
+  const u = sky.material.uniforms;
+  u.top.value.setHex(t.top); u.mid.value.setHex(t.mid); u.bot.value.setHex(t.bot); u.sunCol.value.setHex(t.sunCol);
+  scene.background.setHex(t.mid);
+  scene.fog.color.setHex(t.mid);
+  scene.fog.near = t.fog[0]; scene.fog.far = t.fog[1];
+  hemi.color.setHex(t.hemi[0]); hemi.groundColor.setHex(t.hemi[1]); hemi.intensity = t.hemi[2];
+  sun.color.setHex(t.sun[0]); sun.intensity = t.sun[1];
+  M.cloud.color.setHex(t.cloud[0]); M.cloud.emissive.setHex(t.cloud[1]);
+  M.cloudShade.color.setHex(t.cloudShade[0]); M.cloudShade.emissive.setHex(t.cloudShade[1]);
+  peakRock.color.setHex(t.peak[0]); peakSnow.color.setHex(t.peak[1]);
+  M.rockPeak.color.setHex(id === 'night' ? 0x3a4562 : 0x7e8796);
+  M.snowPeak.color.setHex(id === 'night' ? 0x8a98bd : 0xffffff);
+  peaks.scale.y = t.peakScale;
+  stars.visible = t.stars;
+  cloudSea.visible = t.sea === 'cloud';
+  cloudSea.material.color.setHex(t.seaColor);
+  water.visible = t.sea === 'water';
+  water.material.color.setHex(t.seaColor);
+  dust.material.color.setHex(t.dust);
+}
+
+function updateWater() {
+  water.position.x = Math.round(camera.position.x / WATER_CELL) * WATER_CELL;
+  water.position.z = Math.round(camera.position.z / WATER_CELL) * WATER_CELL;
+  const pos = water.geometry.attributes.position;
+  const t = game.time;
+  for (let i = 0; i < pos.count; i++) {
+    const wx = pos.getX(i) + water.position.x;
+    const wz = pos.getZ(i) + water.position.z;
+    pos.setY(i, Math.sin(wx * 0.12 + t * 1.1) * 0.7 + Math.cos(wz * 0.1 + t * 0.8) * 0.7);
+  }
+  pos.needsUpdate = true;
+}
 const flyingCoins = [];
 const coinPool = [];
 const missiles = [];
@@ -803,7 +1068,12 @@ function clearEnemies() {
   bulletPool.push(...bullets.splice(0).map((b) => b.mesh));
 }
 
-function newGame() {
+function newGame(opts = {}) {
+  const mode = opts.mode || 'endless';
+  const level = mode === 'campaign' ? opts.level || 1 : 0;
+  applyTheme(mode === 'campaign' ? LEVELS[level - 1].theme : 'sky');
+  removeBoss();
+  wing.active = false; wingMesh.visible = false; beam.visible = false;
   for (const st of [...straights]) disposeStraight(st);
   straights = []; passed = []; removeQueue = [];
   for (const c of flyingCoins) c.mesh.visible = false;
@@ -820,6 +1090,9 @@ function newGame() {
     chaseGap: 12, chaseHold: 0, stumbleT: 0, deathT: 0, deathKind: '',
     trail: [], camYaw: 0, camY: 4, camPull: 0, nextMilestone: 500, ej: null,
     loopCd: 0, enemyT: 8, kills: 0,
+    mode, level, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
+    score: opts.score || 0, levelStartScore: opts.score || 0,
+    speedBonus: level ? (level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
   });
   Object.assign(player, {
     s: 0, x: 0, y: 0, vy: 0, lane: 0, alt: CRUISE, air: false, slideT: 0, pendingTurn: 0, fireCd: 0,
@@ -936,6 +1209,7 @@ const targetX = (t) => (t.type === 'rock' ? t.lane * LANE_W : t.x);
 const targetY = (t) => (t.type === 'rock' ? CRUISE : t.y);
 
 function findTarget(fromS) {
+  if (game.boss && !game.boss.dying) return game.boss;
   let best = null;
   let bestScore = Infinity;
   for (const e of enemies) {
@@ -968,7 +1242,7 @@ function actFire() {
   if (!m.parent) scene.add(m);
   m.visible = true;
   const target = findTarget(player.s);
-  if (target) target.targeted = true;
+  if (target && target.type !== 'boss') target.targeted = true;
   missiles.push({
     mesh: m, st: player.st, s: player.s + 0.4, prevS: player.s, x: player.x + (side ? 1.5 : -1.5), y: player.alt - 0.15,
     vs: game.speed + 4, t: 0, smokeT: 0, target,
@@ -1012,8 +1286,178 @@ function killEnemy(e, byMissile) {
 }
 
 function hitObstacle(ob) {
-  if (player.shield > 0) { smash(ob, player.st, false); shake = 0.25; return; }
+  if (player.shield > 0 || game.levelClear) { smash(ob, player.st, false); shake = 0.25; return; }
+  if (ob.type === 'rock' && game.wingmen > 0) { wingmanSave(ob); return; }
   die(ob.type);
+}
+
+// a loyal wingman swoops in and shoots the mine down just before impact
+function wingmanSave(ob) {
+  game.wingmen--;
+  smash(ob, player.st, false); // leaves the mine's world position in _v
+  wing.target.copy(_v);
+  wing.side = player.x <= 0 ? 1 : -1;
+  wing.t = 0;
+  wing.active = true;
+  wingMesh.visible = true;
+  shake = 0.2;
+  sfx('wingman');
+  hud.toast(game.wingmen > 0 ? `Wingman saved you! ${game.wingmen} left` : 'Wingman saved you! None left');
+}
+
+function animateWingman(dt) {
+  if (!wing.active) return;
+  wing.t += dt;
+  const T = 2.0;
+  const p = Math.min(1, wing.t / T);
+  const climb = Math.max(0, wing.t - 0.9);
+  const x = player.x + wing.side * lerp(3.4, 2.4, Math.min(1, p * 3));
+  worldOf(player.st, player.s + lerp(-3, 42, ease(p)), x, CRUISE + 1.1 + climb * 5, wingMesh.position);
+  wingMesh.rotation.set(climb * 0.6, player.yaw, -wing.side * (0.3 + climb * 1.3));
+  if (wing.t < 0.25) {
+    beam.visible = true;
+    const len = wingMesh.position.distanceTo(wing.target);
+    beam.position.copy(wingMesh.position).lerp(wing.target, 0.5);
+    beam.scale.set(1, 1, Math.max(0.1, len));
+    beam.lookAt(wing.target);
+  } else beam.visible = false;
+  if (wing.t > T) { wing.active = false; wingMesh.visible = false; beam.visible = false; }
+}
+
+// ============================================================ boss fights
+function spawnBoss() {
+  const lv = LEVELS[game.level - 1];
+  const def = BOSSES[lv.boss];
+  const m = lv.boss === 'flanker' ? makeFlankerBoss() : lv.boss === 'bomber' ? makeBomber() : makeStealth();
+  scene.add(m);
+  worldOf(player.st, player.s + 170, 0, def.y + 8, m.position);
+  game.boss = {
+    type: 'boss', id: lv.boss, def, mesh: m, hp: def.hp, maxHp: def.hp, gap: 170, x: 0, y: def.y, lane: 0,
+    st: player.st, s: player.s + 170, attackT: 3.2, moveT: 2, pulse: 0, dying: 0, smashed: false, bank: 0,
+    yaw: yawOf(player.st.dir), attackN: 0, angry: false,
+  };
+  ui.bossName.textContent = def.name;
+  hud.toast('Warning! Boss incoming');
+  sfx('warn');
+  setTimeout(() => sfx('warn'), 450);
+}
+
+function removeBoss() {
+  if (game.boss) { scene.remove(game.boss.mesh); game.boss = null; }
+}
+
+function placeBoss(dt, b) {
+  worldOf(player.st, player.s + b.gap, b.x, b.y + Math.sin(game.time * 1.6) * 0.25, _v);
+  b.mesh.position.lerp(_v, damp(b.dying ? 3 : 6, dt));
+  b.yaw = lerpAngle(b.yaw, yawOf(player.st.dir), damp(3, dt));
+  b.mesh.rotation.y = b.yaw;
+  if (!b.dying) { b.mesh.rotation.z = -b.bank; b.mesh.rotation.x = 0; }
+  if (b.pulse > 0) { b.pulse -= dt; b.mesh.scale.setScalar(1 + Math.max(0, b.pulse) * 0.4); } else b.mesh.scale.setScalar(1);
+}
+
+function updateBoss(dt) {
+  const b = game.boss;
+  if (!b) return;
+  b.st = player.st;
+  b.s = player.s + b.gap;
+  if (b.dying > 0) {
+    b.dying += dt;
+    b.y -= dt * (2 + b.dying * 5);
+    b.gap += dt * 4;
+    b.mesh.rotation.z += dt * 2.5;
+    b.mesh.rotation.x = -0.35;
+    if (Math.random() < dt * 12) {
+      _v.copy(b.mesh.position).add(_v3.set(rand(-3, 3), rand(-1, 1), rand(-3, 3)));
+      burst(_v, 0xffa040, 10);
+      puff(_v, 2, 1.5, 1.0, 0x555555);
+    }
+    if (Math.random() < dt * 3) sfx('boom');
+    placeBoss(dt, b);
+    if (b.dying > 2.6) {
+      burst(b.mesh.position, 0xffd080, 60);
+      puff(b.mesh.position, 14, 3);
+      sfx('boom');
+      removeBoss();
+      levelComplete();
+    }
+    return;
+  }
+  const angry = b.hp <= b.maxHp / 2;
+  b.gap = lerp(b.gap, b.def.gap + Math.sin(game.time * 0.7) * 3, damp(0.9, dt));
+  b.moveT -= dt;
+  if (b.moveT <= 0) { b.lane = randInt(-1, 1); b.moveT = rand(1.4, 2.6) * (angry ? 0.7 : 1); }
+  const dx = b.lane * LANE_W - b.x;
+  b.x += dx * damp(2.2, dt);
+  b.bank = lerp(b.bank, clamp(dx * 0.35, -0.6, 0.6), damp(4, dt));
+  if (b.gap < b.def.gap + 12) {
+    b.attackT -= dt;
+    if (b.attackT <= 0) bossAttack(b, angry);
+  }
+  placeBoss(dt, b);
+}
+
+function bossAttack(b, angry) {
+  b.attackN++;
+  if (b.id === 'flanker') {
+    if (b.attackN % 2) dropMine(b, b.lane); else bossGuns(b, 3);
+    b.attackT = angry ? 1.2 : 1.7;
+  } else if (b.id === 'bomber') {
+    // carpet of mines, never all three lanes
+    const n = angry || Math.random() < 0.5 ? 2 : 1;
+    [-1, 0, 1].sort(() => Math.random() - 0.5).slice(0, n).forEach((l) => dropMine(b, l));
+    b.attackT = angry ? 1.5 : 2.1;
+  } else {
+    const k = b.attackN % 3;
+    if (k === 0) bossGuns(b, 5);
+    else if (k === 1) [-1, 0, 1].sort(() => Math.random() - 0.5).slice(0, 2).forEach((l) => dropMine(b, l));
+    else { bossGuns(b, 3); dropMine(b, player.lane); }
+    b.attackT = angry ? 0.95 : 1.35;
+  }
+}
+
+function dropMine(b, lane) {
+  const st = player.st;
+  const s = b.s - 3;
+  if (s > st.L - 10 || s < player.s + 12) return;
+  const ob = { type: 'rock', s, half: 0.9, lane, meshes: [] };
+  st.obstacles.push(ob);
+  buildMine(st, ob, b.y - 0.6);
+  sfx('drop');
+}
+
+function bossGuns(b, n) {
+  for (let i = 0; i < n; i++) {
+    for (const off of [-0.4, 0.4]) {
+      const m = bulletPool.pop() || new THREE.Mesh(G.tracer, M.tracer);
+      if (!m.parent) scene.add(m);
+      m.visible = true;
+      bullets.push({ mesh: m, st: player.st, s: b.s - 3 - i * 2.4, x: b.x + off, y: CRUISE, prevR: Infinity, v: 34 });
+    }
+  }
+  sfx('gun');
+}
+
+function hitBoss() {
+  const b = game.boss;
+  if (!b || b.dying) return;
+  b.hp--;
+  b.pulse = 0.25;
+  burst(b.mesh.position, 0xffb050, 16);
+  puff(b.mesh.position, 3, 1.2, 0.8, 0x777777);
+  sfx('hit');
+  game.score += 100 * game.mult;
+  if (b.hp <= 0) {
+    b.dying = 0.0001;
+    game.levelClear = true;
+    game.bossDone = true;
+    game.score += 2000 * game.level;
+    hud.toast(game.level === LEVELS.length ? 'Final boss destroyed!' : 'Boss destroyed!');
+    sfx('boom');
+    shake = 0.5;
+  } else if (!b.angry && b.hp <= b.maxHp / 2) {
+    b.angry = true;
+    hud.toast('Boss damaged! It is getting angry');
+  }
 }
 
 function die(kind) {
@@ -1136,7 +1580,7 @@ function updatePlayerWorld() {
 function updatePlaying(dt) {
   const st = player.st;
   game.slow = Math.max(0, game.slow - dt * 0.04);
-  game.speed = Math.min(MAX_SPEED, BASE_SPEED + Math.sqrt(game.dist) * 0.34) * (1 - game.slow);
+  game.speed = Math.min(MAX_SPEED, BASE_SPEED + game.speedBonus + Math.sqrt(game.dist) * 0.34) * (1 - game.slow);
   const sp = game.speed;
   const prevS = player.s;
   player.s += sp * dt;
@@ -1181,7 +1625,8 @@ function updatePlaying(dt) {
     player.alt = player.air ? altTarget : lerp(player.alt, altTarget, damp(16, dt));
   }
 
-  // corners
+  // corners (the autopilot takes the turn while a beaten boss goes down)
+  if (game.levelClear && !player.pendingTurn && inTurnWindow()) player.pendingTurn = st.corner === 'R' ? 1 : -1;
   if (player.pendingTurn && player.s >= st.L - 1.0) executeTurn();
   else if (player.s > st.L + HALF - 0.7) { die('wall'); return; }
   updateTurnHint();
@@ -1199,6 +1644,12 @@ function updatePlaying(dt) {
 
   updateEnemies(dt, prevS);
   if (game.state !== 'playing') return;
+  if (game.mode === 'campaign') {
+    const lv = LEVELS[game.level - 1];
+    if (!game.boss && !game.bossDone && game.score - game.levelStartScore >= lv.target) spawnBoss();
+    updateBoss(dt);
+    if (game.state !== 'playing') return;
+  }
 
   // rings
   const mag = player.magnet > 0;
@@ -1258,7 +1709,7 @@ function spawnEnemy(ahead = 125) {
 
 function updateEnemies(dt, prevPlayerS) {
   // spawning
-  if (game.dist > 250) {
+  if (game.dist > 250 && !game.boss) {
     game.enemyT -= dt;
     if (game.enemyT <= 0 && !enemies.some((e) => !e.smashed)) {
       const diff = difficulty();
@@ -1283,7 +1734,7 @@ function updateEnemies(dt, prevPlayerS) {
     }
     // head-on collision
     if (onTrack && e.prevR >= -1.5 && r <= 1.8 && Math.abs(e.x - player.x) < 1.9 && Math.abs(player.alt - e.y) < 1.5) {
-      if (player.shield > 0) { killEnemy(e, false); enemies.splice(i, 1); continue; }
+      if (player.shield > 0 || game.levelClear) { killEnemy(e, false); enemies.splice(i, 1); continue; }
       die('fighter');
       return;
     }
@@ -1300,7 +1751,7 @@ function fireBullet(e) {
     const m = bulletPool.pop() || new THREE.Mesh(G.tracer, M.tracer);
     if (!m.parent) scene.add(m);
     m.visible = true;
-    bullets.push({ mesh: m, st: e.st, s: e.s - 2.6, x: e.x + off, y: e.y, prevR: Infinity });
+    bullets.push({ mesh: m, st: e.st, s: e.s - 2.6, x: e.x + off, y: e.y, prevR: Infinity, v: 70 });
   }
   sfx('gun');
 }
@@ -1308,12 +1759,12 @@ function fireBullet(e) {
 function updateBullets(dt) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
-    b.s -= 70 * dt;
+    b.s -= b.v * dt;
     const onTrack = b.st === player.st;
     const r = onTrack ? b.s - player.s : -Infinity;
     let dead = !onTrack || r < -12;
     if (!dead && b.prevR >= -0.8 && r <= 1.0 && Math.abs(b.x - player.x) < 0.95 && Math.abs(b.y - player.alt) < 0.9) {
-      if (player.rollT > 0 || player.shield > 0) {
+      if (player.rollT > 0 || player.shield > 0 || game.levelClear) {
         burst(b.mesh.position, 0xffe080, 5);
         sfx('ping');
         if (player.rollT > 0) hud.toast('Deflected!');
@@ -1346,6 +1797,11 @@ function updateMissiles(dt) {
       m.y += (targetY(tg) - m.y) * damp(9, dt);
     }
     let dead = m.t > 1.8 || m.s > m.st.L + HALF + 2 || m.st.dead;
+    const bo = game.boss;
+    if (!dead && bo && !bo.dying && bo.st === m.st && m.s >= bo.s - 3 && Math.abs(m.x - bo.x) < 3 && Math.abs(m.y - bo.y) < 2.6) {
+      hitBoss();
+      dead = true;
+    }
     if (!dead) {
       for (const e of enemies) {
         if (e.smashed || e.st !== m.st) continue;
@@ -1525,7 +1981,7 @@ function animateJet(dt) {
   }
   let pitch = 0;
   let roll = 0;
-  if (game.state === 'menu' || game.state === 'loading') {
+  if (game.state === 'menu' || game.state === 'loading' || game.state === 'levelDone') {
     roll = Math.sin(game.time * 1.2) * 0.12;
     pitch = Math.sin(game.time * 0.9) * 0.05;
     jet.root.position.y = CRUISE + Math.sin(game.time * 1.7) * 0.12;
@@ -1587,6 +2043,7 @@ function animateWorld(dt) {
     }
     for (let i = 0; i < st.beacons.length; i++) st.beacons[i].visible = Math.sin(t * 3 - i * 0.5) > -0.2;
     for (const l of st.mineLights) l.visible = blink;
+    for (const d of st.drops) d.position.y = lerp(d.position.y, CRUISE, damp(5, dt));
     for (const sp of st.spinners) {
       sp.m.rotation.x += sp.sx * dt;
       sp.m.rotation.y += sp.sy * dt;
@@ -1642,6 +2099,7 @@ function updateCamera(dt) {
   skyGroup.position.copy(camera.position);
   cloudSea.position.x = camera.position.x;
   cloudSea.position.z = camera.position.z;
+  if (water.visible) updateWater();
   sun.position.set(player.pos.x + 14, 32, player.pos.z + 10);
   sun.target.position.set(player.pos.x, 0, player.pos.z);
 }
@@ -1716,6 +2174,10 @@ function sfx(name) {
     case 'ping': tone(t, 2400, 0.08, 'square', 0.06, 3200); break;
     case 'warn': [0, 0.18].forEach((d) => tone(t + d, 880, 0.12, 'square', 0.07)); break;
     case 'click': tone(t, 900, 0.04, 'square', 0.05); break;
+    case 'wingman': noise(t, 0.7, 0.3, 1200, 0.5); for (let i = 0; i < 5; i++) noise(t + 0.05 + i * 0.035, 0.04, 0.2, 2200, 1.2); tone(t, 520, 0.6, 'sawtooth', 0.05, 260, master, 1400); break;
+    case 'hit': tone(t, 300, 0.12, 'square', 0.15, 120); noise(t, 0.15, 0.3, 900, 0.8); break;
+    case 'drop': tone(t, 700, 0.35, 'sine', 0.08, 250); break;
+    case 'victory': [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(t + i * 0.12, f, 0.3, 'triangle', 0.15)); break;
     case 'chute': noise(t, 0.4, 0.3, 500, 0.4, 'lowpass'); break;
     case 'stumble': tone(t, 160, 0.3, 'sawtooth', 0.15, 60, master, 900); noise(t, 0.25, 0.3, 500, 0.8); break;
     case 'boom': noise(t, 0.7, 0.6, 300, 0.5, 'lowpass'); tone(t, 120, 0.5, 'sine', 0.5, 35); break;
@@ -1769,7 +2231,25 @@ const ui = {
   newBest: $('newBest'), deathMsg: $('deathMsg'), overTitle: $('overTitle'),
   nameRow: $('nameRow'), nameInput: $('nameInput'), boardList: $('boardList'),
   skinList: $('skinList'), hangarBank: $('hangarBank'),
+  wmIcons: $('wmIcons'), levelBar: $('levelBar'), levelLbl: $('levelLbl'), levelFill: $('levelFill'),
+  bossBar: $('bossBar'), bossName: $('bossName'), bossFill: $('bossFill'),
+  campaign: $('campaign'), levelList: $('levelList'), levelDone: $('levelDone'),
+  ldKicker: $('ldKicker'), ldTitle: $('ldTitle'), ldScore: $('ldScore'), ldRings: $('ldRings'), ldKills: $('ldKills'), ldNext: $('ldNext'),
+  againBtn: $('againBtn'), overBoardBtn: $('overBoardBtn'),
 };
+const PLANE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1.6 6.2 7.9 5.3v2.2l-7.6-2.6-.6 5.4 2.9 2v1.8L12 21l-4.2.8V20l2.9-2-.6-5.4-7.6 2.6V13l7.9-5.3z"/></svg>';
+function renderWingmen() {
+  ui.wmIcons.innerHTML = '';
+  for (let i = 0; i < WINGMEN; i++) {
+    const sp = document.createElement('span');
+    sp.className = 'wm' + (i < game.wingmen ? '' : ' lost');
+    sp.innerHTML = PLANE_SVG;
+    ui.wmIcons.appendChild(sp);
+  }
+}
+function hideScreens() {
+  for (const el of [ui.menu, ui.over, ui.pause, ui.board, ui.hangar, ui.campaign, ui.levelDone]) show(el, false);
+}
 const show = (el, v) => el.classList.toggle('hidden', !v);
 const fmt = (n) => Math.floor(n).toLocaleString('en-US');
 
@@ -1792,7 +2272,7 @@ const hud = {
   last: {},
   toastTimer: 0,
   powerEls: {},
-  reset() { this.last = {}; ui.powers.innerHTML = ''; this.powerEls = {}; hideTurnHint(); },
+  reset() { this.last = {}; ui.powers.innerHTML = ''; this.powerEls = {}; hideTurnHint(); renderWingmen(); show(ui.levelBar, false); show(ui.bossBar, false); },
   set(key, el, val) { if (this.last[key] !== val) { this.last[key] = val; el.textContent = val; } },
   update() {
     this.set('score', ui.score, fmt(game.score));
@@ -1802,6 +2282,18 @@ const hud = {
     ui.mslL.classList.toggle('empty', !jet.msl[0].visible);
     ui.mslR.classList.toggle('empty', !jet.msl[1].visible);
     ui.loopIco.classList.toggle('empty', player.looping || game.loopCd > 0);
+    if (this.last.wm !== game.wingmen) { this.last.wm = game.wingmen; renderWingmen(); }
+    const camp = game.mode === 'campaign';
+    const b = game.boss;
+    show(ui.levelBar, camp && !b);
+    show(ui.bossBar, !!b);
+    if (camp && !b) {
+      const lv = LEVELS[game.level - 1];
+      const pct = Math.min(100, ((game.score - game.levelStartScore) / lv.target) * 100);
+      ui.levelFill.style.width = `${pct}%`;
+      this.set('lvl', ui.levelLbl, game.bossDone ? `Level ${lv.n} · ${lv.name} · clear!` : `Level ${lv.n} · ${lv.name} · boss at ${Math.floor(pct)}%`);
+    }
+    if (b) ui.bossFill.style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
     for (const k of ['magnet', 'shield', 'double']) {
       const v = player[k];
       let el = this.powerEls[k];
@@ -1935,13 +2427,79 @@ function refreshMenuStats() {
 function startRun() {
   initAudio();
   commitPending();
-  if (game.state !== 'menu') newGame();
+  if (game.state !== 'menu' || game.mode !== 'endless') newGame({ mode: 'endless' });
   game.state = 'playing';
-  show(ui.menu, false); show(ui.over, false); show(ui.pause, false); show(ui.hud, true);
-  show(ui.board, false); show(ui.hangar, false);
+  hideScreens();
+  show(ui.hud, true);
   hud.toast('Take off!');
   sfx('power');
   startMusic();
+}
+
+function startCampaign(level, carry = 0) {
+  initAudio();
+  commitPending();
+  newGame({ mode: 'campaign', level, score: carry });
+  game.state = 'playing';
+  hideScreens();
+  show(ui.hud, true);
+  const lv = LEVELS[level - 1];
+  hud.toast(`Level ${lv.n} · ${lv.name}`);
+  sfx('power');
+  startMusic();
+}
+function restart() {
+  if (game.mode === 'campaign') startCampaign(game.level, game.levelStartScore);
+  else startRun();
+}
+
+function renderCampaign() {
+  ui.levelList.innerHTML = '';
+  for (const lv of LEVELS) {
+    const t = THEMES[lv.theme];
+    const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+    const locked = lv.n > campaign.unlocked;
+    const card = document.createElement('div');
+    card.className = 'level-card' + (locked ? ' locked' : '') + (lv.n <= campaign.cleared ? ' cleared' : '');
+    const sw = document.createElement('div');
+    sw.className = 'swatch';
+    sw.style.background = `linear-gradient(${hex(t.top)}, ${hex(t.mid)} 55%, ${hex(t.sea === 'water' ? t.seaColor : t.peak[0])})`;
+    const txt = document.createElement('div');
+    const tt = document.createElement('div'); tt.className = 't'; tt.textContent = `Level ${lv.n} · ${lv.name}`;
+    const dd = document.createElement('div'); dd.className = 'd'; dd.textContent = `${fmt(lv.target)} points, then ${BOSSES[lv.boss].name.replace(/^.*· /, '')}`;
+    txt.append(tt, dd);
+    const btn = document.createElement('button');
+    btn.className = 'mid-btn';
+    btn.textContent = locked ? 'Locked' : 'Fly';
+    btn.disabled = locked;
+    btn.addEventListener('click', () => startCampaign(lv.n, 0));
+    card.append(sw, txt, btn);
+    ui.levelList.appendChild(card);
+  }
+}
+function openCampaign() { initAudio(); renderCampaign(); show(ui.menu, false); show(ui.campaign, true); }
+function closeCampaign() { show(ui.campaign, false); show(ui.menu, true); }
+
+function levelComplete() {
+  game.state = 'levelDone';
+  stopMusic();
+  hideTurnHint();
+  const lv = LEVELS[game.level - 1];
+  const final = lv.n === LEVELS.length;
+  game.bank += game.coins;
+  store.set('starlane.bank', game.bank);
+  campaign.cleared = Math.max(campaign.cleared, lv.n);
+  campaign.unlocked = Math.max(campaign.unlocked, Math.min(LEVELS.length, lv.n + 1));
+  store.set('wowf.campaign', campaign);
+  ui.ldKicker.textContent = final ? 'Campaign complete' : `Level ${lv.n} · ${lv.name} complete`;
+  ui.ldTitle.textContent = final ? 'Victory!' : 'Boss down!';
+  ui.ldScore.textContent = fmt(game.score);
+  ui.ldRings.textContent = game.coins;
+  ui.ldKills.textContent = game.kills;
+  ui.ldNext.textContent = final ? 'Play again' : `Level ${lv.n + 1}: ${LEVELS[lv.n].name}`;
+  show(ui.hud, false);
+  show(ui.levelDone, true);
+  sfx('victory');
 }
 
 function pauseGame() {
@@ -1960,16 +2518,19 @@ function resumeGame() {
 function toMenu() {
   commitPending();
   stopMusic();
-  newGame();
+  newGame({ mode: 'endless' });
   game.state = 'menu';
   refreshMenuStats();
-  show(ui.pause, false); show(ui.over, false); show(ui.hud, false); show(ui.board, false); show(ui.hangar, false); show(ui.menu, true);
+  hideScreens();
+  show(ui.hud, false);
+  show(ui.menu, true);
 }
 
 function gameOver() {
   game.state = 'over';
   const score = Math.floor(game.score);
-  const record = score > game.best;
+  const camp = game.mode === 'campaign';
+  const record = !camp && score > game.best;
   if (record) { game.best = score; store.set('starlane.best', score); }
   game.bank += game.coins;
   store.set('starlane.bank', game.bank);
@@ -1979,7 +2540,7 @@ function gameOver() {
     gate: 'You hit an overhead barrier',
     rock: 'You flew into a sky mine',
     caught: 'The hunter drone shot you down',
-    shot: 'An enemy fighter shot you down',
+    shot: 'Enemy fire shot you down',
     fighter: 'You collided head-on with an enemy fighter',
     eject: 'Esc never paused the game. It pulled the ejection handle.',
   };
@@ -1991,8 +2552,11 @@ function gameOver() {
   ui.newBest.classList.toggle('record', record);
   ui.newBest.innerHTML = record ? 'New best score!' : `Best: <b>${fmt(game.best)}</b>`;
   if (game.kills) ui.newBest.innerHTML += ` · Bandits downed: <b>${game.kills}</b>`;
+  if (camp) ui.newBest.innerHTML = `Level ${game.level} · ${LEVELS[game.level - 1].name}` + (game.kills ? ` · Bandits downed: <b>${game.kills}</b>` : '');
+  ui.againBtn.textContent = camp ? `Retry level ${game.level}` : 'Fly again';
+  show(ui.overBoardBtn, !camp);
   pendingEntry = null;
-  if (qualifies(score)) {
+  if (!camp && qualifies(score)) {
     pendingEntry = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), score, dist: Math.floor(game.dist), date: Date.now() };
     ui.nameInput.value = store.get('wowf.lastName', 'Pilot');
     show(ui.nameRow, true);
@@ -2001,11 +2565,18 @@ function gameOver() {
   }
   show(ui.hud, false);
   show(ui.over, true);
-  if (pendingEntry && !matchMedia('(pointer: coarse)').matches) { ui.nameInput.focus(); ui.nameInput.select(); }
+  // the callsign box is not focused, so Space and Enter go straight to "Fly again"
 }
 
 $('playBtn').addEventListener('click', startRun);
-$('againBtn').addEventListener('click', startRun);
+$('againBtn').addEventListener('click', restart);
+$('campaignBtn').addEventListener('click', openCampaign);
+$('campaignBack').addEventListener('click', closeCampaign);
+ui.ldNext.addEventListener('click', () => {
+  if (game.level >= LEVELS.length) startCampaign(1, 0);
+  else startCampaign(game.level + 1, Math.floor(game.score));
+});
+$('ldMenu').addEventListener('click', toMenu);
 $('menuBtn').addEventListener('click', toMenu);
 $('resumeBtn').addEventListener('click', resumeGame);
 $('quitBtn').addEventListener('click', toMenu);
@@ -2022,7 +2593,7 @@ $('saveBtn').addEventListener('click', () => {
 ui.muteBtn.addEventListener('click', () => { initAudio(); setMuted(!muted); });
 setMuted(muted);
 
-const overlayOpen = () => !ui.board.classList.contains('hidden') || !ui.hangar.classList.contains('hidden');
+const overlayOpen = () => [ui.board, ui.hangar, ui.campaign].some((el) => !el.classList.contains('hidden'));
 
 window.addEventListener('keydown', (e) => {
   const k = e.key;
@@ -2034,11 +2605,19 @@ window.addEventListener('keydown', (e) => {
   if (game.state === 'playing' && (k === ' ' || k === 'f' || k === 'F' || k === 'Enter')) { actFire(); return; }
   if (e.repeat) return;
   if (overlayOpen()) {
-    if (k === 'Escape') { if (!ui.board.classList.contains('hidden')) closeBoard(); else closeHangar(); }
+    if (k === 'Escape') {
+      if (!ui.board.classList.contains('hidden')) closeBoard();
+      else if (!ui.hangar.classList.contains('hidden')) closeHangar();
+      else closeCampaign();
+    }
+    return;
+  }
+  if (game.state === 'levelDone') {
+    if (k === 'Enter' || k === ' ') ui.ldNext.click();
     return;
   }
   if (game.state === 'menu' || game.state === 'over') {
-    if (k === 'Enter' || k === ' ') startRun();
+    if (k === 'Enter' || k === ' ') { if (game.state === 'over') restart(); else startRun(); }
     return;
   }
   if (game.state === 'paused') {
@@ -2110,6 +2689,7 @@ function frame(now) {
     updateFlyingCoins(dt);
     animateJet(dt);
     animateDrone(dt);
+    animateWingman(dt);
     animateWorld(dt);
     updateCamera(dt);
     updateDust();
@@ -2125,4 +2705,4 @@ show(ui.loading, false);
 requestAnimationFrame(frame);
 
 // small hook for automated smoke tests
-window.__game = { game, player, enemies, jet, spawnEnemy };
+window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing };

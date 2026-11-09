@@ -21,6 +21,11 @@
     <button id="pauseBtn" class="icon-btn" aria-label="Pause">❚❚</button>
   </div>
   <div id="ammo"><span class="msl" id="mslL"></span><span class="loop-ico" id="loopIco">E</span><span class="msl" id="mslR"></span></div>
+  <div id="topCenter">
+    <div id="wingmen" title="Loyal wingmen: each one shoots down a mine you would have hit"><span class="lbl">Wingmen</span><span id="wmIcons" class="wm-icons"></span></div>
+    <div id="levelBar" class="hidden"><div class="lbl" id="levelLbl"></div><div class="bar"><i id="levelFill"></i></div></div>
+    <div id="bossBar" class="hidden"><div class="lbl" id="bossName"></div><div class="bar boss"><i id="bossFill"></i></div></div>
+  </div>
   <div id="powers"></div>
   <div id="turnHint"></div>
   <div id="toast"></div>
@@ -31,7 +36,10 @@
     <div class="kicker">JAS 39 Gripen E</div>
     <h1><span>Wings of War</span><span>Forever</span></h1>
     <p class="tag">Fly the sky track, collect rings, shoot down bandits and outrun the hunter drone.</p>
-    <button id="playBtn" class="big-btn">Take off</button>
+    <div class="row-btns big">
+      <button id="playBtn" class="big-btn">Endless</button>
+      <button id="campaignBtn" class="big-btn alt">Campaign</button>
+    </div>
     <div class="row-btns">
       <button id="hangarBtn" class="mid-btn">Hangar</button>
       <button id="boardBtn" class="mid-btn">Leaderboard</button>
@@ -41,6 +49,7 @@
       <div><kbd>←</kbd><kbd>→</kbd> turn at corners · change lanes</div>
       <div><kbd>↑</kbd> climb &nbsp; <kbd>↓</kbd> dive &nbsp; <kbd>Space</kbd> fire missile</div>
       <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> barrel roll &nbsp; <kbd>E</kbd> loop</div>
+      <div>Your 3 loyal wingmen shoot down mines you would hit</div>
       <div class="touch-only">Phone: swipe to steer, climb and dive · tap to fire</div>
       <div class="dim"><kbd>Esc</kbd> pause · <kbd>M</kbd> mute</div>
     </div>
@@ -63,6 +72,29 @@
     <div class="best">Rings banked: <b id="hangarBank">0</b></div>
     <div id="skinList" class="skins"></div>
     <button id="hangarBack" class="big-btn">Back</button>
+  </div>
+</div>
+
+<div id="campaign" class="screen hidden">
+  <div class="panel">
+    <div class="kicker">Three levels · three bosses</div>
+    <h2>Campaign</h2>
+    <div id="levelList" class="levels"></div>
+    <button id="campaignBack" class="big-btn">Back</button>
+  </div>
+</div>
+
+<div id="levelDone" class="screen hidden">
+  <div class="panel">
+    <div class="kicker" id="ldKicker">Level complete</div>
+    <h2 id="ldTitle">Boss down!</h2>
+    <div class="stats">
+      <div><span>Total score</span><b id="ldScore">0</b></div>
+      <div><span>Rings</span><b id="ldRings">0</b></div>
+      <div><span>Bandits</span><b id="ldKills">0</b></div>
+    </div>
+    <button id="ldNext" class="big-btn">Next level</button>
+    <button id="ldMenu" class="link-btn">Menu</button>
   </div>
 </div>
 

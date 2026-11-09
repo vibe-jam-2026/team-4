@@ -32,9 +32,25 @@ The menu says Esc pauses. It doesn't: Esc pulls the ejection handle and ends you
 - Your speed and score multiplier go up the farther you fly.
 - If you scrape a mine while changing lanes, the hunter drone closes in. Scrape twice in quick succession and it shoots you down.
 
+### Campaign
+
+Next to Endless, the **Campaign** has three levels, each with its own map and a boss at the end:
+
+| Level | Map | Score to reach | Boss (original designs inspired by Russian aircraft) |
+| --- | --- | --- | --- |
+| 1 | Ocean, with islands below | 1,500 | Heavy twin-tail fighter "Flanker" |
+| 2 | Mountains, with peaks beside the track | 2,500 | Swing-wing strategic bomber "Blackjack" |
+| 3 | Night | 3,500 | Final boss: stealth fighter "Felon" |
+
+A bar at the top shows how close you are to the boss. The boss flies ahead of you, drops mines into the lanes and fires tracers back at you. Shoot it down with missiles to clear the level. It gets faster and more aggressive below half health. Clearing a level unlocks the next one, and your score carries over.
+
+### Loyal wingmen
+
+You start every run (and every campaign level) with three loyal wingmen, shown at the top of the screen. If you are about to hit a mine, a wingman drone swoops in and shoots it down. When all three are used, the next mine you hit ends the run.
+
 ### Leaderboard and hangar
 
-- The top 10 scores on your device are kept in a local leaderboard. Enter your callsign after a qualifying run.
+- The top 10 Endless scores on your device are kept in a local leaderboard. Enter your callsign after a qualifying run, or press Space to fly again (your last callsign is used).
 - Rings you collect are banked. Spend them in the **Hangar** on Gripen color schemes: Sweden (50), Ukraine (100) and Brazil (150).
 - Everything is saved in the browser's local storage.
 
