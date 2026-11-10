@@ -188,3 +188,34 @@ kbd {
   #topCenter { top: calc(max(12px, env(safe-area-inset-top)) + 48px); width: 62vw; }
   .row-btns.big .big-btn { font-size: 26px; }
 }
+
+/* ---------- flares and voice commands ---------- */
+.flare-btn {
+  position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom)); pointer-events: auto; cursor: pointer;
+  min-width: 112px; padding: 6px 12px 4px; border-radius: 12px; border: 2px solid #ffb23f; overflow: hidden;
+  background: rgba(12, 26, 46, 0.6); color: #fff; text-align: left; display: flex; flex-direction: column; position: absolute;
+}
+.flare-btn .fl-name { font-family: var(--display); font-size: 26px; line-height: 1; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #ffd27a; position: relative; z-index: 1; }
+.flare-btn .fl-sub { font-size: 11px; font-weight: 600; opacity: .85; position: relative; z-index: 1; }
+.flare-btn i { position: absolute; left: 0; bottom: 0; height: 100%; width: 0; background: #ffb23f33; transition: width .1s linear; }
+.flare-btn.cooldown { border-color: #ffffff40; }
+.flare-btn.cooldown .fl-name { color: #ffffff80; }
+.flare-btn.active { border-color: #fff; box-shadow: 0 0 22px #ffd27a; }
+.mic-badge {
+  position: absolute; left: 140px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 8px);
+  display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 14px; background: rgba(12, 26, 46, 0.6);
+  font-size: 11px; font-weight: 700; max-width: 40vw;
+}
+.mic-badge #micLabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mic-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4040; box-shadow: 0 0 8px #ff4040; animation: micpulse 1.2s infinite; flex: none; }
+.mic-badge b { width: 36px; height: 5px; border-radius: 3px; background: #0006; overflow: hidden; flex: none; }
+.mic-badge b i { display: block; height: 100%; width: 0; background: #6cff9e; }
+.mic-badge.heard { outline: 2px solid #ffd27a; }
+@keyframes micpulse { 50% { opacity: .35; } }
+.voice-row { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.voice-row .mid-btn { font-size: 20px; }
+.voice-row .mid-btn.on { background: #ff4040; border-color: #ff4040; color: #fff; }
+.voice-info { font-size: 12px; opacity: .78; line-height: 1.4; }
+@media (max-width: 420px) { .mic-badge { left: 136px; max-width: 34vw; } }
+/* tall menus scroll on short screens instead of being cut off */
+.screen { overflow-y: auto; place-items: safe center; }
