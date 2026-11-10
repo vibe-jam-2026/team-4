@@ -2,6 +2,10 @@
 
 Every published iteration of the game gets a version number. The current version is shown at the bottom of the menu, the pause screen and the game-over screen.
 
+## v13 (2026-11-10)
+- Armory: a shop in the menu where rings buy five extra missiles (Wasp, Lance, Striker, Longbow, Sunfire) with 2× to 9× boss damage, different round counts, reload times and blast radii. The equipped one is carried on top of the standard missiles and fires with V.
+- Fixed the bottom-left HUD overlap: the Flares button, the armory-missile button and the microphone badge now share one row (stacked on phones).
+
 ## v12 (2026-11-10)
 - The in-game HUD shows "Esc pause" next to the pause button (Esc still ejects).
 - Lane changes work right up to a corner: near a corner, left/right queues the turn and still moves you a lane. Before, the turn swallowed the lane change, and at a T-junction you could not change lane at all.

@@ -21,8 +21,11 @@
     <span class="esc-hint"><kbd>Esc</kbd> pause</span>
     <button id="pauseBtn" class="icon-btn" aria-label="Pause">❚❚</button>
   </div>
-  <button id="flareBtn" class="flare-btn" aria-label="Deploy flares"><span class="fl-name">Flares</span><span class="fl-sub" id="flareSub">Q · tap</span><span class="fl-slow" id="slowSub">Slow-mo ready</span><i id="flareFill"></i></button>
-  <div id="micBadge" class="mic-badge hidden" title="Listening for voice commands"><span class="dot"></span><span id="micLabel">Mic</span><b id="micLevel"><i></i><u id="micThr"></u></b></div>
+  <div id="bottomLeft" class="bottom-left">
+    <button id="flareBtn" class="flare-btn" aria-label="Deploy flares"><span class="fl-name">Flares</span><span class="fl-sub" id="flareSub">Q · tap</span><span class="fl-slow" id="slowSub">Slow-mo ready</span><i id="flareFill"></i></button>
+    <button id="specialBtn" class="special-btn hidden" aria-label="Fire armory missile"><span class="sp-name" id="spName">Missile</span><span class="sp-sub" id="spSub">V · 0 left</span><span class="sp-pips" id="spPips"></span><i id="spFill"></i></button>
+    <div id="micBadge" class="mic-badge hidden" title="Listening for shouts"><span class="dot"></span><span id="micLabel">Mic</span><b id="micLevel"><i></i><u id="micThr"></u></b></div>
+  </div>
   <div id="ammo"><span class="msl" id="mslL"></span><span class="loop-ico" id="loopIco">E</span><span class="msl" id="mslR"></span></div>
   <div id="topCenter">
     <div id="wingmen" title="Loyal wingmen: each one shoots down a mine you would have hit"><span class="lbl">Wingmen</span><span id="wmIcons" class="wm-icons"></span></div>
@@ -60,15 +63,16 @@
       <button id="playBtn" class="big-btn">Endless</button>
       <button id="campaignBtn" class="big-btn alt">Campaign</button>
     </div>
-    <div class="row-btns">
+    <div class="row-btns three">
       <button id="hangarBtn" class="mid-btn">Hangar</button>
+      <button id="armoryBtn" class="mid-btn">Armory</button>
       <button id="boardBtn" class="mid-btn">Leaderboard</button>
     </div>
     <div class="best">Best: <b id="bestMenu">0</b> · Rings banked: <b id="bankMenu">0</b></div>
     <div class="controls">
       <div><kbd>←</kbd><kbd>→</kbd> turn at corners · change lanes</div>
       <div><kbd>↑</kbd> climb &nbsp; <kbd>↓</kbd> dive &nbsp; <kbd>Space</kbd> fire missile</div>
-      <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> barrel roll &nbsp; <kbd>E</kbd> loop</div>
+      <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> barrel roll &nbsp; <kbd>E</kbd> loop &nbsp; <kbd>V</kbd> armory missile</div>
       <div>Your 3 loyal wingmen shoot down mines and block boss fire</div>
       <div class="touch-only">Phone: swipe to steer, climb and dive · tap to fire</div>
       <div><kbd>Q</kbd> or shout <b>"Flares!"</b> to confuse boss fire · <kbd>Z</kbd> slow-mo</div>
@@ -90,6 +94,17 @@
     <h2>Leaderboard</h2>
     <ol id="boardList" class="board"></ol>
     <button id="boardBack" class="big-btn">Back</button>
+  </div>
+</div>
+
+<div id="armory" class="screen hidden">
+  <div class="panel">
+    <div class="kicker">Extra firepower for boss fights</div>
+    <h2>Armory</h2>
+    <div class="best">Rings banked: <b id="armoryBank">0</b></div>
+    <div id="armoryList" class="armory"></div>
+    <p class="armory-note">Your standard missiles (Space) always stay on the jet and do 1× damage. The equipped armory missile is carried as well and fires with <kbd>V</kbd>. Rounds refill every run and every level.</p>
+    <button id="armoryBack" class="big-btn">Back</button>
   </div>
 </div>
 
