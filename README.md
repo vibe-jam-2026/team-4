@@ -17,6 +17,7 @@ Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions 
 | Climb (over laser fences) | ↑ or W | swipe up |
 | Dive (under overhead barriers) | ↓ or S | swipe down |
 | Fire a missile (homes in on mines and fighters) | Space, F or click | tap |
+| Fire the armory missile (bought in the Armory) | V | missile button |
 | Deploy flares (boss fire goes for the flares) | Q, or shout **"Flares!"** (any loud noise) | Flares button |
 | Slow motion (when flares are ready) | Z | |
 | Pause / mute | P or the pause button / M | buttons |
@@ -51,6 +52,18 @@ A bar at the top shows how close you are to the boss. The boss flies ahead of yo
 
 You start every run (and every campaign level) with three loyal wingmen, shown at the top of the screen. If you are about to hit a mine, a wingman drone swoops in and shoots it down. Wingmen also fly into boss fire and block a whole burst for you. When all three are used, the next mine you hit ends the run.
 
+### Armory
+
+Rings also buy extra missiles in the **Armory** (menu). Your two standard wingtip missiles (Space, 1× boss damage) always stay on the jet. The armory missile you equip is carried as well and fires with **V**. It is a bigger missile launched from under the fuselage that goes for the boss first. Its rounds refill every run and every level.
+
+| Missile | Boss damage | Rounds | Reload | Extra | Price |
+| --- | --- | --- | --- | --- | --- |
+| Wasp | 2× | 6 | 1.2 s | fast and light | 40 rings |
+| Lance | 3× | 5 | 1.6 s | long-range dart | 80 |
+| Striker | 4× | 4 | 2.0 s | cluster blast clears mines in every lane | 140 |
+| Longbow | 6× | 3 | 2.6 s | heavy, built for bosses | 220 |
+| Sunfire | 9× | 2 | 3.5 s | massive blast | 320 |
+
 ### Leaderboard and hangar
 
 - The top 10 Endless scores on your device are kept in a local leaderboard. Enter your callsign after a qualifying run, or press Space to fly again (your last callsign is used).
@@ -59,7 +72,7 @@ You start every run (and every campaign level) with three loyal wingmen, shown a
 
 ### Versions
 
-Every published iteration gets a version number, shown at the bottom of the menu, the pause screen and the game-over screen. The current version is **v12**; see [CHANGELOG.md](CHANGELOG.md) for what changed in each one. To release a new iteration, bump `VERSION` and `VERSION_DATE` at the top of `game/main.js` and add an entry to the changelog.
+Every published iteration gets a version number, shown at the bottom of the menu, the pause screen and the game-over screen. The current version is **v13**; see [CHANGELOG.md](CHANGELOG.md) for what changed in each one. To release a new iteration, bump `VERSION` and `VERSION_DATE` at the top of `game/main.js` and add an entry to the changelog.
 
 ### Running locally
 

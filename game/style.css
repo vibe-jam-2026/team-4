@@ -300,3 +300,49 @@ canvas#game { transition: filter .2s; }
 .mic-test.heard span { color: #6cff9e; }
 .ver { margin-top: 10px; font-size: 11px; letter-spacing: .08em; opacity: .55; }
 @media (max-width: 420px) { .esc-hint { display: none; } }
+
+/* ---------- bottom-left HUD group (fixes the overlap) ---------- */
+.bottom-left {
+  position: absolute; left: 16px; bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; max-width: calc(50% - 90px);
+}
+.bottom-left .flare-btn { position: relative; left: auto; bottom: auto; }
+.bottom-left .mic-badge { position: static; left: auto; bottom: auto; margin-bottom: 6px; max-width: 220px; }
+.special-btn {
+  position: relative; pointer-events: auto; cursor: pointer; min-width: 112px; padding: 6px 12px 4px; border-radius: 12px; overflow: hidden;
+  border: 2px solid var(--sp, #ff7a3d); background: rgba(12, 26, 46, 0.6); color: #fff; text-align: left; display: flex; flex-direction: column;
+}
+.special-btn .sp-name { font-family: var(--display); font-size: 26px; line-height: 1; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sp, #ff7a3d); position: relative; z-index: 1; }
+.special-btn .sp-sub { font-size: 11px; font-weight: 600; opacity: .9; position: relative; z-index: 1; }
+.special-btn .sp-pips { display: flex; gap: 3px; margin-top: 3px; position: relative; z-index: 1; }
+.special-btn .sp-pips b { width: 8px; height: 8px; border-radius: 2px; background: var(--sp, #ff7a3d); }
+.special-btn .sp-pips b.used { background: #ffffff30; }
+.special-btn i { position: absolute; left: 0; bottom: 0; height: 100%; width: 0; background: #ffffff18; }
+.special-btn.empty { border-color: #ffffff40; } .special-btn.empty .sp-name { color: #ffffff70; }
+@media (max-width: 700px) {
+  .bottom-left { flex-direction: column-reverse; align-items: flex-start; max-width: 46vw; gap: 6px; }
+  .bottom-left .mic-badge { max-width: 42vw; margin: 0; }
+  .flare-btn, .special-btn { min-width: 0; }
+  .flare-btn .fl-name, .special-btn .sp-name { font-size: 22px; }
+}
+
+/* ---------- armory ---------- */
+.row-btns.three { grid-template-columns: 1fr 1fr 1fr; }
+.row-btns.three .mid-btn { font-size: 20px; padding-left: 6px; padding-right: 6px; }
+.armory { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; text-align: left; }
+.arm-card { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; background: #0003; border-radius: 12px; padding: 8px 10px; }
+.arm-card.equipped { outline: 2px solid var(--accent); }
+.arm-icon { position: relative; height: 18px; border-radius: 9px 4px 4px 9px; background: linear-gradient(90deg, var(--c) 0 28%, #eef2f6 28% 88%, #9aa3ab 88%); box-shadow: 0 0 10px var(--c); }
+.arm-icon::before, .arm-icon::after { content: ""; position: absolute; right: 2px; width: 10px; height: 8px; background: #9aa3ab; }
+.arm-icon::before { top: -6px; clip-path: polygon(0 100%, 100% 0, 100% 100%); } .arm-icon::after { bottom: -6px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.arm-name { font-family: var(--display); font-size: 26px; line-height: .95; font-weight: 600; }
+.arm-desc { font-size: 12px; opacity: .82; line-height: 1.35; }
+.arm-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; font-size: 11.5px; font-weight: 700; }
+.arm-stats .dmg { color: var(--c); }
+.arm-card .mid-btn { font-size: 19px; white-space: nowrap; }
+.armory-note { font-size: 12px; opacity: .8; line-height: 1.45; margin: 0 0 10px; }
+@media (max-width: 420px) { .arm-card { grid-template-columns: 44px 1fr; } .arm-card .mid-btn { grid-column: 1 / -1; } }
+/* phones: the missile rack moves beside the mute button so it never sits under the Flares button */
+@media (max-width: 700px) {
+  #ammo { left: auto; right: 70px; transform: none; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 14px); }
+}

@@ -3,7 +3,7 @@
 import * as THREE from './vendor/three.module.min.js';
 
 // Version: bump on every published iteration (see CHANGELOG.md)
-const VERSION = 'v12';
+const VERSION = 'v13';
 const VERSION_DATE = '2026-11-10';
 
 // ============================================================ helpers
@@ -60,6 +60,15 @@ const SKINS = [
   { id: 'brazil', name: 'Brazil', price: 150, c: [0x009c3b, 0x007a2e, 0xffdf00, 0x002776] },
 ];
 const LB_KEY = 'wowf.leaderboard';
+// armory missiles: bought with rings, fired with V on top of the standard missiles (1× damage)
+const SPECIALS = [
+  { id: 'wasp', name: 'Wasp', dmg: 2, ammo: 6, reload: 1.2, speed: 140, splash: 0, price: 40, color: 0x7bd66b, desc: 'Fast and light, with plenty of rounds.' },
+  { id: 'lance', name: 'Lance', dmg: 3, ammo: 5, reload: 1.6, speed: 125, splash: 0, price: 80, color: 0x4fa3ff, desc: 'Long-range dart with a sharper punch.' },
+  { id: 'striker', name: 'Striker', dmg: 4, ammo: 4, reload: 2.0, speed: 110, splash: 7, price: 140, color: 0xffc93c, desc: 'Cluster warhead: clears mines in every lane.' },
+  { id: 'longbow', name: 'Longbow', dmg: 6, ammo: 3, reload: 2.6, speed: 100, splash: 4, price: 220, color: 0xff7a3d, desc: 'Heavy missile built to bring down bosses.' },
+  { id: 'sunfire', name: 'Sunfire', dmg: 9, ammo: 2, reload: 3.5, speed: 90, splash: 10, price: 320, color: 0xff3b6b, desc: 'Massive warhead and blast. Two per sortie.' },
+];
+const hexCss = (c) => '#' + c.toString(16).padStart(6, '0');
 const WINGMEN = 3;         // loyal wingman saves per run (or per level)
 const THEMES = {
   sky: { top: 0x2f6fd0, mid: 0xc4def6, bot: 0xf4f8ff, sunCol: 0xfff2d0, fog: [70, 250], hemi: [0xe2f0ff, 0x8a9cb8, 1.4], sun: [0xfff3dd, 2.4],
@@ -344,9 +353,10 @@ function starPoints(r) {
 }
 
 // a missile pointing along -z (nose forward)
-function makeMissile() {
+function makeMissile(band = null) {
   const g = new THREE.Group();
   mesh(new THREE.CylinderGeometry(0.065, 0.065, 1.2, 8).rotateX(Math.PI / 2), M.missile, 0, 0, 0, g);
+  if (band) mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 8).rotateX(Math.PI / 2), band, 0, 0, -0.35, g);
   mesh(new THREE.ConeGeometry(0.065, 0.28, 8).rotateX(-Math.PI / 2), M.missileNose, 0, 0, -0.74, g);
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2;
@@ -731,6 +741,13 @@ scene.add(beam);
 const wing = { active: false, t: 0, side: 1, target: new THREE.Vector3() };
 
 // ============================================================ skins
+let ownedSpecials = store.get('wowf.missiles', []);
+if (!Array.isArray(ownedSpecials)) ownedSpecials = [];
+let equippedSpecial = store.get('wowf.missile', null);
+if (!ownedSpecials.includes(equippedSpecial)) equippedSpecial = null;
+const specialDef = () => SPECIALS.find((d) => d.id === equippedSpecial) || null;
+const bandMats = {};
+const bandMat = (d) => (bandMats[d.id] ||= new THREE.MeshBasicMaterial({ color: d.color }));
 let ownedSkins = store.get('wowf.skins', ['default']);
 let currentSkin = store.get('wowf.skin', 'default');
 function applySkin(id) {
@@ -1221,8 +1238,8 @@ function newGame(opts = {}) {
   straights = []; passed = []; removeQueue = [];
   for (const c of flyingCoins) c.mesh.visible = false;
   coinPool.push(...flyingCoins.splice(0));
-  for (const m of missiles) m.mesh.visible = false;
-  missilePool.push(...missiles.splice(0).map((m) => m.mesh));
+  for (const m of missiles) { m.mesh.visible = false; if (m.special) scene.remove(m.mesh); }
+  missilePool.push(...missiles.splice(0).filter((m) => !m.special).map((m) => m.mesh));
   for (const p of sparks) p.mesh.visible = false;
   sparkPool.push(...sparks.splice(0).map((p) => p.mesh));
   for (const p of smokes) p.mesh.visible = false;
@@ -1239,6 +1256,7 @@ function newGame(opts = {}) {
     straightOnly: !!(level && LEVELS[level - 1].straight), flash: 0, flashT: 3,
     flareT: 0, flareCd: 0, timeScale: 1, slowT: 0, slowCd: 0,
     path: [], pathEvents: [], pathNext: 0, stats: freshStats(), rtime: 0, burstAt: 0,
+    spAmmo: specialDef() ? specialDef().ammo : 0, spCd: 0,
   });
   endSlowmo(true);
   if (landing) { scene.remove(landing.group); landing = null; }
@@ -1534,7 +1552,7 @@ function updateFlares(dt) {
 
 // ---------- pilot evaluation: reactions and weapon use ----------
 function freshStats() {
-  return { missiles: 0, hits: 0, mines: 0, bandits: 0, bossHits: 0, flares: 0, decoyed: 0, slowmo: 0, rolls: 0, loops: 0, wingmen: 0, impacts: 0, threats: 0, reactions: [], turns: 0 };
+  return { missiles: 0, hits: 0, mines: 0, bandits: 0, bossHits: 0, flares: 0, decoyed: 0, slowmo: 0, rolls: 0, loops: 0, wingmen: 0, impacts: 0, threats: 0, reactions: [], turns: 0, specials: 0, specialHits: 0, specialDmg: 0 };
 }
 // a threat starts the clock when it is about two seconds out
 function trackThreats(cur) {
@@ -1603,6 +1621,7 @@ function evaluatePilot() {
     ['Manoeuvres', `${st.rolls} rolls · ${st.loops} loops`],
     ['Slow-mo · wingmen', `${st.slowmo} · ${st.wingmen} used`],
   ];
+  if (st.specials) rows.splice(4, 0, ['Armory missiles', `${st.specialHits} / ${st.specials} hit · ${st.specialDmg}× boss dmg`]);
   const notes = [];
   if (avg !== null && avg < 0.45) notes.push('Lightning reflexes: you answer threats in under half a second.');
   else if (avg !== null && avg > 0.9) notes.push(`React earlier: threats took you ${avg.toFixed(1)} s on average to answer.`);
@@ -1638,6 +1657,30 @@ function renderDebrief(el) {
 }
 
 function logEvent(type, pos = player.pos) { game.pathEvents.push({ type, x: pos.x, z: pos.z }); }
+
+// armory missile: launched from under the fuselage, homes in on the boss first
+function actSpecial() {
+  if (game.state !== 'playing') return;
+  const d = specialDef();
+  if (!d) { hud.toast('Equip an armory missile in the menu'); sfx('click'); return; }
+  if (game.spAmmo <= 0) { hud.toast(`${d.name}: out of rounds`); sfx('click'); return; }
+  if (game.spCd > 0) { sfx('click'); return; }
+  game.spAmmo--;
+  game.spCd = d.reload;
+  const m = makeMissile(bandMat(d));
+  m.scale.setScalar(1.5);
+  scene.add(m);
+  const target = findTarget(player.s);
+  if (target && target.type !== 'boss') target.targeted = true;
+  missiles.push({
+    mesh: m, st: player.st, s: player.s + 0.6, prevS: player.s, x: player.x, y: player.alt - 0.45,
+    vs: game.speed + 2, t: 0, smokeT: 0, target, special: d,
+  });
+  game.stats.specials++;
+  react('fire');
+  hud.toast(`${d.name} away!`);
+  sfx('special');
+}
 
 function stumble() {
   sfx('stumble');
@@ -2078,15 +2121,16 @@ function bossGuns(b, n) {
   sfx('gun');
 }
 
-function hitBoss() {
+function hitBoss(dmg = 1) {
   const b = game.boss;
   if (!b || b.dying) return;
-  b.hp--;
-  b.pulse = 0.25;
-  burst(b.mesh.position, 0xffb050, 16);
-  puff(b.mesh.position, 3, 1.2, 0.8, 0x777777);
-  sfx('hit');
-  game.score += 100 * game.mult;
+  b.hp -= dmg;
+  b.pulse = 0.25 + Math.min(0.3, dmg * 0.04);
+  burst(b.mesh.position, 0xffb050, 16 + dmg * 4);
+  puff(b.mesh.position, 3 + dmg, 1.2 + dmg * 0.15, 0.8, 0x777777);
+  sfx(dmg > 1 ? 'bigHit' : 'hit');
+  if (dmg > 1) shake = Math.max(shake, 0.12 + dmg * 0.03);
+  game.score += 100 * game.mult * dmg;
   if (b.hp <= 0) {
     b.dying = 0.0001;
     logEvent('boss', b.mesh.position);
@@ -2244,6 +2288,7 @@ function updatePlaying(dt) {
   if (player.fireCd > 0) player.fireCd -= dt;
   if (game.loopCd > 0) game.loopCd -= dt;
   if (game.flareCd > 0) game.flareCd -= dt;
+  if (game.spCd > 0) game.spCd -= dt;
   if (game.flareT > 0) game.flareT -= dt;
   if (player.rollT > 0) player.rollT -= dt;
   for (let i = 0; i < 2; i++) {
@@ -2455,7 +2500,8 @@ function updateMissiles(dt) {
     const m = missiles[i];
     m.t += dt;
     m.prevS = m.s;
-    m.vs = Math.min(m.vs + 170 * dt, game.speed + 110);
+    const sp = m.special;
+    m.vs = Math.min(m.vs + 170 * dt, game.speed + (sp ? sp.speed : 110));
     m.s += m.vs * dt;
     const tg = m.target && !m.target.smashed ? m.target : null;
     if (m.t < 0.15) {
@@ -2464,18 +2510,25 @@ function updateMissiles(dt) {
       m.x += (targetX(tg) - m.x) * damp(9, dt);
       m.y += (targetY(tg) - m.y) * damp(9, dt);
     }
-    let dead = m.t > 1.8 || m.s > m.st.L + HALF + 2 || m.st.dead;
+    let dead = m.t > (sp ? 2.6 : 1.8) || m.s > m.st.L + HALF + 2 || m.st.dead;
     const bo = game.boss;
     if (!dead && bo && !bo.dying && bo.st === m.st && m.s >= bo.s - 3 && Math.abs(m.x - bo.x) < 3 && Math.abs(m.y - (bo.liftY ?? bo.y)) < 2.6) {
-      game.stats.hits++;
-      game.stats.bossHits++;
-      hitBoss();
+      if (sp) {
+        game.stats.specialHits++;
+        game.stats.specialDmg += sp.dmg;
+        hud.toast(`${sp.name} hit! ${sp.dmg}× damage`);
+      } else {
+        game.stats.hits++;
+        game.stats.bossHits++;
+      }
+      hitBoss(sp ? sp.dmg : 1);
       dead = true;
     }
     if (!dead) {
       for (const e of enemies) {
         if (e.smashed || e.st !== m.st) continue;
         if (m.s >= e.s - 1.6 && m.prevS <= e.s + 2 && Math.abs(m.x - e.x) < 1.8 && Math.abs(m.y - e.y) < 1.4) {
+          if (sp) game.stats.specialHits++;
           killEnemy(e, true);
           dead = true;
           break;
@@ -2487,6 +2540,7 @@ function updateMissiles(dt) {
         if (ob.smashed || ob.type !== 'rock') continue;
         if (m.s >= ob.s - 1.4 && m.prevS <= ob.s + 1.4 && Math.abs(m.x - ob.lane * LANE_W) < 1.2 && Math.abs(m.y - CRUISE) < 1.3) {
           smash(ob, m.st, true);
+          if (sp) game.stats.specialHits++;
           dead = true;
           break;
         }
@@ -2498,14 +2552,20 @@ function updateMissiles(dt) {
     if (dead) {
       if (m.target) m.target.targeted = false;
       puff(m.mesh.position, 3, 0.8);
+      if (sp && sp.splash) {
+        // blast radius: every mine close by goes too (Striker covers all lanes)
+        for (const ob of m.st.obstacles) if (!ob.smashed && ob.type === 'rock' && Math.abs(ob.s - m.s) < sp.splash) smash(ob, m.st, true);
+        burst(m.mesh.position, sp.color, 20 + sp.splash * 2);
+        puff(m.mesh.position, 4 + Math.round(sp.splash / 2), 1 + sp.splash * 0.12);
+      }
       m.mesh.visible = false;
-      missilePool.push(m.mesh);
+      if (sp) scene.remove(m.mesh); else missilePool.push(m.mesh);
       missiles.splice(i, 1);
       continue;
     }
     if (m.t > 0.02) m.mesh.lookAt(_v2); // +z points back along the flight path, so the nose leads
     m.smokeT -= dt;
-    if (m.smokeT <= 0 && m.t > 0.1) { m.smokeT = 0.018; puff(m.mesh.position, 1, 0.55, 0.7); }
+    if (m.smokeT <= 0 && m.t > 0.1) { m.smokeT = 0.018; puff(m.mesh.position, 1, sp ? 0.75 : 0.55, sp ? 0.9 : 0.7, sp ? 0xfff0dc : 0xe8ecf0); }
   }
 }
 
@@ -2879,6 +2939,8 @@ function sfx(name) {
     case 'slowIn': tone(t, 420, 0.7, 'sawtooth', 0.12, 60, master, 900); noise(t, 0.6, 0.25, 500, 0.5, 'lowpass'); break;
     case 'slowOut': tone(t, 80, 0.4, 'sawtooth', 0.1, 600, master, 2400); noise(t, 0.4, 0.3, 1800, 0.5); break;
     case 'heartbeat': tone(t, 60, 0.12, 'sine', 0.5, 40); tone(t + 0.16, 55, 0.12, 'sine', 0.35, 38); break;
+    case 'special': tone(t, 70, 0.2, 'square', 0.25, 40); noise(t, 1.2, 0.45, 900, 0.5); noise(t + 0.1, 0.9, 0.25, 2800, 0.7, 'highpass'); break;
+    case 'bigHit': noise(t, 0.6, 0.55, 400, 0.5, 'lowpass'); tone(t, 160, 0.4, 'sawtooth', 0.2, 50, master, 900); break;
     case 'gear': tone(t, 140, 0.18, 'square', 0.12, 70); noise(t + 0.05, 0.25, 0.25, 600, 0.6); break;
     case 'screech': noise(t, 0.5, 0.35, 2600, 6); noise(t + 0.08, 0.35, 0.25, 3200, 6); tone(t, 90, 0.3, 'sine', 0.4, 40); break;
     case 'heard': tone(t, 1320, 0.07, 'sine', 0.08); tone(t + 0.07, 1760, 0.09, 'sine', 0.08); break;
@@ -3062,6 +3124,8 @@ const ui = {
   smPrompt: $('smPrompt'), smBar: $('smBar'), slowSub: $('slowSub'),
   mapOver: $('mapOver'), legendOver: $('legendOver'), mapDone: $('mapDone'), legendDone: $('legendDone'),
   debriefOver: $('debriefOver'), debriefDone: $('debriefDone'),
+  armory: $('armory'), armoryList: $('armoryList'), armoryBank: $('armoryBank'),
+  specialBtn: $('specialBtn'), spName: $('spName'), spSub: $('spSub'), spPips: $('spPips'), spFill: $('spFill'),
   landingUi: $('landingUi'), landCap: $('landCap'), landKicker: $('landKicker'), fade: $('fade'),
 };
 const PLANE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1.6 6.2 7.9 5.3v2.2l-7.6-2.6-.6 5.4 2.9 2v1.8L12 21l-4.2.8V20l2.9-2-.6-5.4-7.6 2.6V13l7.9-5.3z"/></svg>';
@@ -3075,7 +3139,7 @@ function renderWingmen() {
   }
 }
 function hideScreens() {
-  for (const el of [ui.menu, ui.over, ui.pause, ui.board, ui.hangar, ui.campaign, ui.levelDone]) show(el, false);
+  for (const el of [ui.menu, ui.over, ui.pause, ui.board, ui.hangar, ui.campaign, ui.levelDone, ui.armory]) show(el, false);
 }
 const show = (el, v) => el.classList.toggle('hidden', !v);
 const fmt = (n) => Math.floor(n).toLocaleString('en-US');
@@ -3110,6 +3174,21 @@ const hud = {
     ui.mslR.classList.toggle('empty', !jet.msl[1].visible);
     ui.loopIco.classList.toggle('empty', player.looping || game.loopCd > 0);
     if (this.last.wm !== game.wingmen) { this.last.wm = game.wingmen; renderWingmen(); }
+    const sd = specialDef();
+    show(ui.specialBtn, !!sd);
+    if (sd) {
+      const key = `${sd.id}:${game.spAmmo}`;
+      if (this.last.sp !== key) {
+        this.last.sp = key;
+        ui.specialBtn.style.setProperty('--sp', hexCss(sd.color));
+        ui.spName.textContent = sd.name;
+        ui.spPips.innerHTML = '';
+        for (let i = 0; i < sd.ammo; i++) { const pip = document.createElement('b'); if (i >= game.spAmmo) pip.className = 'used'; ui.spPips.appendChild(pip); }
+        ui.specialBtn.classList.toggle('empty', game.spAmmo <= 0);
+      }
+      this.set('spsub', ui.spSub, game.spAmmo <= 0 ? 'Out of rounds' : game.spCd > 0 ? `Reloading ${game.spCd.toFixed(1)} s` : `V · ${sd.dmg}× damage`);
+      ui.spFill.style.width = game.spCd > 0 ? `${(1 - game.spCd / sd.reload) * 100}%` : '0%';
+    }
     const cd = game.flareCd > 0;
     ui.flareBtn.classList.toggle('cooldown', cd && game.flareT <= 0);
     ui.flareBtn.classList.toggle('active', game.flareT > 0);
@@ -3357,6 +3436,62 @@ function renderHangar() {
     ui.skinList.appendChild(card);
   }
 }
+function renderArmory() {
+  ui.armoryBank.textContent = fmt(game.bank);
+  ui.armoryList.innerHTML = '';
+  const card = (opts) => {
+    const c = document.createElement('div');
+    c.className = 'arm-card' + (opts.equipped ? ' equipped' : '');
+    c.style.setProperty('--c', opts.color);
+    const icon = document.createElement('div'); icon.className = 'arm-icon';
+    const txt = document.createElement('div');
+    const nm = document.createElement('div'); nm.className = 'arm-name'; nm.textContent = opts.name;
+    const ds = document.createElement('div'); ds.className = 'arm-desc'; ds.textContent = opts.desc;
+    const stats = document.createElement('div'); stats.className = 'arm-stats';
+    for (const [cls, t] of opts.stats) { const sp = document.createElement('span'); sp.className = cls; sp.textContent = t; stats.appendChild(sp); }
+    txt.append(nm, ds, stats);
+    const btn = document.createElement('button'); btn.className = 'mid-btn';
+    btn.textContent = opts.btn; btn.disabled = !!opts.disabled;
+    if (opts.equipped) btn.classList.add('on');
+    btn.addEventListener('click', opts.onClick);
+    c.append(icon, txt, btn);
+    ui.armoryList.appendChild(c);
+  };
+  card({
+    name: 'Standard only', color: '#c8d0d8', desc: 'Just the two wingtip missiles (Space). Always on the jet.',
+    stats: [['dmg', 'Boss damage 1×'], ['', '2 on the rails, reloading']],
+    equipped: !equippedSpecial, btn: !equippedSpecial ? 'Equipped' : 'Equip', disabled: !equippedSpecial,
+    onClick: () => { equippedSpecial = null; store.set('wowf.missile', null); renderArmory(); },
+  });
+  for (const d of SPECIALS) {
+    const owned = ownedSpecials.includes(d.id);
+    const eq = equippedSpecial === d.id;
+    card({
+      name: d.name, color: hexCss(d.color), desc: d.desc,
+      stats: [['dmg', `Boss damage ${d.dmg}×`], ['', `${d.ammo} rounds`], ['', `reload ${d.reload} s`]].concat(d.splash ? [['', `blast ${d.splash} m`]] : []),
+      equipped: eq,
+      btn: eq ? 'Equipped' : owned ? 'Equip' : `Buy · ${d.price}`,
+      disabled: eq || (!owned && game.bank < d.price),
+      onClick: () => {
+        if (!ownedSpecials.includes(d.id)) {
+          if (game.bank < d.price) return;
+          game.bank -= d.price;
+          store.set('starlane.bank', game.bank);
+          ownedSpecials = [...ownedSpecials, d.id];
+          store.set('wowf.missiles', ownedSpecials);
+          sfx('buy');
+        }
+        equippedSpecial = d.id;
+        store.set('wowf.missile', d.id);
+        renderArmory();
+        refreshMenuStats();
+      },
+    });
+  }
+}
+function openArmory() { initAudio(); renderArmory(); show(ui.menu, false); show(ui.armory, true); }
+function closeArmory() { show(ui.armory, false); show(ui.menu, true); }
+
 function openHangar() { initAudio(); renderHangar(); show(ui.menu, false); show(ui.hangar, true); }
 function closeHangar() { show(ui.hangar, false); show(ui.menu, true); }
 
@@ -3630,6 +3765,9 @@ function gameOver() {
 $('playBtn').addEventListener('click', startRun);
 $('againBtn').addEventListener('click', restart);
 $('campaignBtn').addEventListener('click', openCampaign);
+$('armoryBtn').addEventListener('click', openArmory);
+$('armoryBack').addEventListener('click', closeArmory);
+ui.specialBtn.addEventListener('click', (e) => { e.stopPropagation(); actSpecial(); });
 ui.flareBtn.addEventListener('click', (e) => { e.stopPropagation(); deployFlares('tap'); });
 ui.flareBtn.addEventListener('touchend', (e) => { e.stopPropagation(); }, { passive: true });
 ui.voiceBtn.addEventListener('click', () => { if (voice.on) stopVoice(); else startVoice(); });
@@ -3662,7 +3800,7 @@ $('saveBtn').addEventListener('click', () => {
 ui.muteBtn.addEventListener('click', () => { initAudio(); setMuted(!muted); });
 setMuted(muted);
 
-const overlayOpen = () => [ui.board, ui.hangar, ui.campaign].some((el) => !el.classList.contains('hidden'));
+const overlayOpen = () => [ui.board, ui.hangar, ui.campaign, ui.armory].some((el) => !el.classList.contains('hidden'));
 
 window.addEventListener('keydown', (e) => {
   const k = e.key;
@@ -3677,6 +3815,7 @@ window.addEventListener('keydown', (e) => {
     if (k === 'Escape') {
       if (!ui.board.classList.contains('hidden')) closeBoard();
       else if (!ui.hangar.classList.contains('hidden')) closeHangar();
+      else if (!ui.armory.classList.contains('hidden')) closeArmory();
       else closeCampaign();
     }
     return;
@@ -3706,6 +3845,7 @@ window.addEventListener('keydown', (e) => {
     case 'e': case 'E': actLoop(); break;
     case 'q': case 'Q': deployFlares('key'); break;
     case 'z': case 'Z': startSlowmo('key'); break;
+    case 'v': case 'V': actSpecial(); break;
     case 'Escape': if (game.state === 'playing') die('eject'); break; // the menu says Esc pauses. It doesn't.
     case 'p': case 'P': pauseGame(); break;
     case 'm': case 'M': setMuted(!muted); break;
@@ -3791,7 +3931,7 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
-  deployFlares, voiceHeard, bullets, startSlowmo, VERSION, actSideTest: actSide, finishLanding, getLanding: () => landing, evaluatePilot,
+  deployFlares, voiceHeard, bullets, startSlowmo, VERSION, actSideTest: actSide, actSpecial, SPECIALS, finishLanding, getLanding: () => landing, evaluatePilot,
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },
