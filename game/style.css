@@ -251,3 +251,40 @@ canvas#game { transition: filter .2s; }
 .sens { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; font-weight: 600; }
 .sens input { width: 120px; accent-color: #ffb23f; }
 .sens span { min-width: 54px; text-align: left; opacity: .85; }
+
+/* ---------- pilot debrief ---------- */
+.flightmap { height: 150px; }
+.debrief { margin: 0 0 10px; padding: 10px; border-radius: 12px; background: #0003; text-align: left; }
+.debrief .db-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.debrief .grade {
+  flex: none; width: 54px; height: 54px; border-radius: 12px; display: grid; place-items: center;
+  font-family: var(--display); font-size: 46px; line-height: 1; font-weight: 700; color: var(--ink); padding-top: 6px;
+  background: linear-gradient(#ffe0a3, var(--accent) 60%, var(--accent-deep)); box-shadow: 0 3px 0 #7a3a08;
+}
+.debrief .grade.g-S { background: linear-gradient(#ffffff, #9fe8ff 50%, #3a9bd5); box-shadow: 0 3px 0 #1d4f73, 0 0 16px #9fe8ff88; }
+.debrief .grade.g-C, .debrief .grade.g-D { background: linear-gradient(#e0e6ee, #9aa6b4 60%, #6b7684); box-shadow: 0 3px 0 #3a424c; }
+.debrief .db-title { font-family: var(--display); font-size: 24px; line-height: 1; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.debrief .db-rating { font-size: 12px; opacity: .8; }
+.debrief .db-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+.debrief .db-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; border-bottom: 1px solid #ffffff12; padding: 3px 0; }
+.debrief .db-row span { opacity: .78; }
+.debrief .db-row b { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.debrief .db-notes { margin: 8px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.45; }
+.debrief .db-notes li::before { content: "› "; color: var(--accent); font-weight: 700; }
+@media (max-width: 420px) { .debrief .db-grid { grid-template-columns: 1fr; } }
+
+/* ---------- landing cinematic ---------- */
+#landingUi { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+.land-bars::before, .land-bars::after { content: ""; position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+.land-bars::before { top: 0; } .land-bars::after { bottom: 0; }
+.land-cap { position: absolute; left: 0; right: 0; bottom: calc(9vh + 18px); text-align: center; text-shadow: 0 2px 0 #000a, 0 0 18px #000; }
+.land-cap span { display: block; font-size: 12px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--sky); }
+.land-cap b { font-family: var(--display); font-size: 40px; line-height: 1; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #fff; }
+.skip-btn {
+  position: absolute; right: 18px; top: calc(9vh + 14px); pointer-events: auto; cursor: pointer;
+  padding: 6px 14px 4px; border-radius: 10px; border: 2px solid #ffffff60; background: #0006; color: #fff;
+  font-family: var(--display); font-size: 22px; letter-spacing: .08em; text-transform: uppercase;
+}
+.skip-btn:hover { border-color: var(--accent); }
+#fade { position: fixed; inset: 0; z-index: 9; background: #000; opacity: 0; pointer-events: none; transition: opacity .45s; }
+#fade.on { opacity: 1; }
