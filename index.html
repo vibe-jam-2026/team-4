@@ -33,6 +33,13 @@
   <div id="toast"></div>
 </div>
 
+<div id="landingUi" class="hidden">
+  <div class="land-bars"></div>
+  <div class="land-cap"><span id="landKicker">Mission accomplished</span><b id="landCap">Returning to base</b></div>
+  <button id="skipBtn" class="skip-btn">Skip ▸</button>
+</div>
+<div id="fade"></div>
+
 <div id="slowmo" aria-hidden="true">
   <div class="sm-vignette"></div>
   <div class="sm-lines"></div>
@@ -112,6 +119,7 @@
       <div><span>Bandits</span><b id="ldKills">0</b></div>
     </div>
     <div class="flightmap-wrap"><canvas id="mapDone" class="flightmap"></canvas><div class="map-legend" id="legendDone"></div></div>
+    <div class="debrief" id="debriefDone"></div>
     <button id="ldNext" class="big-btn">Next level</button>
     <button id="ldMenu" class="link-btn">Menu</button>
   </div>
@@ -135,6 +143,7 @@
       <div><span>Rings</span><b id="finalCoins">0</b></div>
     </div>
     <div class="flightmap-wrap"><canvas id="mapOver" class="flightmap"></canvas><div class="map-legend" id="legendOver"></div></div>
+    <div class="debrief" id="debriefOver"></div>
     <div class="best" id="newBest">Best: <b>0</b></div>
     <div id="nameRow" class="name-row hidden">
       <label for="nameInput">Top 10! Your callsign:</label>

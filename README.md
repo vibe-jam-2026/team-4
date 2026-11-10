@@ -81,6 +81,19 @@ It uses the laptop's built-in microphone (the browser's default input). The menu
 
 After a crash, an ejection or a won level, the end screen draws a top-down map of the route you flew, with north up. It shows every turn and lane change, the start, where the run ended (a red X for a crash, a flag for a win) and markers for bandits and mines shot down, wingman saves, flares and the boss kill.
 
+### Pilot debrief
+
+The game-over and level-complete screens grade your flying from S to D, with a rating out of 100 and up to three coaching notes ("Lightning reflexes", "Trigger-happy: only 30% of your missiles hit", "Try flares against boss fire", and so on). It measures:
+
+- **Reactions:** when a fence, gate, mine in your lane or boss burst comes within about two seconds of impact, a clock starts. It stops when you make the right move (climb, dive, change lane, fire, roll, loop or flares). The debrief shows your average and fastest reaction time.
+- **Threat handling:** how many threats you got past cleanly, against those a shield or wingman had to absorb.
+- **Weapon use:** missiles fired and hit rate, bandits and mines shot down, boss hits, flares deployed and boss rounds they decoyed.
+- **Manoeuvres:** barrel rolls, loops, slow-motion uses and wingmen spent.
+
+### Landing
+
+When you shoot down a level's boss, the Gripen flies home to a floating sky airbase before the results screen. It lowers its gear on approach over flashing approach lights, flares and touches down with tyre smoke, rolls out, turns off onto the taxiway and taxis into the hangar, where a marshaller waves it in. Press Space, click or tap **Skip** to go straight to the results.
+
 ### Music
 
 All music is original and synthesized live in the browser, with no audio files. Normal flying has a driving synthwave cruise track. When a boss appears, the music crashes into a fast 80s rock-synth anthem, with power chords, gated drums and a soaring lead. It switches back once the boss is down. A recording of the switch is in [media/music-preview.mp3](media/music-preview.mp3).

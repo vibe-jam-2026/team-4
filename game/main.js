@@ -268,6 +268,14 @@ const M = {
   monster: std(0xb9c2c9, { roughness: 0.55, metalness: 0.3 }),
   monsterDark: std(0x55606b, { roughness: 0.5, metalness: 0.4 }),
   windowGlow: basic(0xffc56a),
+  asphalt: std(0x3a3f46, { roughness: 0.95, metalness: 0 }),
+  rwPaint: basic(0xf4f4f4),
+  taxiLine: basic(0xffd23f),
+  rwLight: basic(0xfff1c8),
+  rwStrobe: basic(0xffffff),
+  hangar: std(0x8b96a3, { metalness: 0.5, roughness: 0.5 }),
+  hangarRoof: std(0x9aa5b2, { metalness: 0.5, roughness: 0.5, side: THREE.DoubleSide }),
+  hangarLight: basic(0xfff0c8),
   // loyal wingman
   wingman: std(0xb8c4cf, { roughness: 0.5, metalness: 0.3 }),
   wingDark: std(0x5c6773),
@@ -399,7 +407,17 @@ function makeGripen() {
   const bubble = mesh(G.bubble, M.bubble, 0, 0, 0, air);
   bubble.scale.set(1.1, 0.6, 1.6);
   bubble.visible = false;
-  return { root, air, body, flame, bubble, canopy, msl, reload: [0, 0], nextSide: 0, baseRoll: 0, basePitch: 0 };
+  // landing gear (hidden in flight): nose wheel and two main wheels
+  const gear = new THREE.Group();
+  body.add(gear);
+  const wheel = new THREE.CylinderGeometry(1, 1, 1, 12).rotateZ(Math.PI / 2);
+  for (const [x, z, r] of [[0, -1.45, 0.13], [-0.62, 0.35, 0.17], [0.62, 0.35, 0.17]]) {
+    mesh(boxGeo(0.06, 0.5, 0.06), M.jetDark, x, -0.38, z, gear);
+    const w = mesh(wheel, M.jetBlack, x, -0.66, z, gear);
+    w.scale.set(0.1, r, r);
+  }
+  gear.visible = false;
+  return { root, air, body, flame, bubble, canopy, msl, gear, reload: [0, 0], nextSide: 0, baseRoll: 0, basePitch: 0 };
 }
 
 // ============================================================ enemy fighter (twin tails, red stars)
@@ -1081,7 +1099,7 @@ const game = {
   mode: 'endless', level: 0, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
   levelStartScore: 0, speedBonus: 0, diffOffset: 0, straightOnly: false, flash: 0, flashT: 3,
   flareT: 0, flareCd: 0, timeScale: 1, slowT: 0, slowCd: 0,
-  path: [], pathEvents: [], pathNext: 0,
+  path: [], pathEvents: [], pathNext: 0, stats: null, rtime: 0, burstAt: 0,
   best: store.get('starlane.best', 0), bank: store.get('starlane.bank', 0),
 };
 let campaign = store.get('wowf.campaign', { unlocked: 1, cleared: 0 });
@@ -1216,9 +1234,12 @@ function newGame(opts = {}) {
     speedBonus: level ? Math.min(2, level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
     straightOnly: !!(level && LEVELS[level - 1].straight), flash: 0, flashT: 3,
     flareT: 0, flareCd: 0, timeScale: 1, slowT: 0, slowCd: 0,
-    path: [], pathEvents: [], pathNext: 0,
+    path: [], pathEvents: [], pathNext: 0, stats: freshStats(), rtime: 0, burstAt: 0,
   });
   endSlowmo(true);
+  if (landing) { scene.remove(landing.group); landing = null; }
+  show(ui.landingUi, false);
+  jet.gear.visible = false;
   for (const f of flares) f.mesh.visible = false;
   flarePool.push(...flares.splice(0).map((f) => f.mesh));
   Object.assign(player, {
@@ -1284,6 +1305,7 @@ function executeTurn() {
   player.st = nx;
   ensureAhead();
   game.score += 25 * game.mult;
+  game.stats.turns++;
   sfx('turn');
 }
 
@@ -1317,20 +1339,23 @@ function actSide(side, roll = false) {
   if (roll && player.rollT <= 0) {
     player.rollT = ROLL_TIME;
     player.rollDir = side;
+    game.stats.rolls++;
+    react('roll');
     game.score += 10 * game.mult;
     sfx('roll');
   }
-  if (!tryTurn(side)) changeLane(side);
+  if (!tryTurn(side)) { const before = player.lane; changeLane(side); if (player.lane !== before) react('lane'); }
 }
 function actClimb() {
   if (game.state !== 'playing' || player.air || player.looping) return;
   player.vy = CLIMB_V; player.air = true; player.slideT = 0;
+  react('climb');
   sfx('climb');
 }
 function actDive() {
   if (game.state !== 'playing' || player.looping) return;
   if (player.air) player.vy = Math.min(player.vy, -22);
-  if (player.slideT <= 0) sfx('dive');
+  if (player.slideT <= 0) { sfx('dive'); react('dive'); }
   player.slideT = DIVE_TIME;
 }
 function actLoop() {
@@ -1339,6 +1364,8 @@ function actLoop() {
   player.loopT = 0;
   player.air = false; player.vy = 0; player.y = 0; player.slideT = 0;
   game.score += 25 * game.mult;
+  game.stats.loops++;
+  react('loop');
   hud.toast('Loop!');
   sfx('loop');
 }
@@ -1385,6 +1412,8 @@ function actFire() {
     mesh: m, st: player.st, s: player.s + 0.4, prevS: player.s, x: player.x + (side ? 1.5 : -1.5), y: player.alt - 0.15,
     vs: game.speed + 4, t: 0, smokeT: 0, target,
   });
+  game.stats.missiles++;
+  react('fire');
   sfx('missile');
 }
 
@@ -1399,6 +1428,8 @@ function deployFlares(source = 'key') {
   game.flareT = FLARE_TIME;
   game.flareCd = FLARE_COOLDOWN;
   logEvent('flares');
+  game.stats.flares++;
+  react('flares');
   if (game.slowT > 0) endSlowmo(); // flares out: snap back to full speed
   // fan of burning flares to both sides, with a little of the jet's speed so they hang in view
   const fx = -Math.sin(player.yaw);
@@ -1429,6 +1460,7 @@ function startSlowmo(reason) {
   if (game.flareCd > 0) { if (reason === 'key') hud.toast(`Flares in ${Math.ceil(game.flareCd)}s`); return false; }
   game.slowT = SLOWMO_TIME;
   game.slowCd = SLOWMO_COOLDOWN;
+  game.stats.slowmo++;
   document.body.classList.add('slowmo');
   ui.smPrompt.textContent = voice.on ? 'Shout "Flares!"' : 'Press Q for flares!';
   setSlowAudio(true);
@@ -1468,6 +1500,7 @@ function threatCheck() {
 function decoy(b) {
   if (b.decoy) return;
   b.decoy = true;
+  if (b.boss && game.stats) game.stats.decoyed++;
   b.dx = (b.x >= player.x ? 1 : -1) * rand(5, 9);
   b.dy = -rand(2, 5);
 }
@@ -1490,6 +1523,111 @@ function updateFlares(dt) {
   }
 }
 
+// ---------- pilot evaluation: reactions and weapon use ----------
+function freshStats() {
+  return { missiles: 0, hits: 0, mines: 0, bandits: 0, bossHits: 0, flares: 0, decoyed: 0, slowmo: 0, rolls: 0, loops: 0, wingmen: 0, impacts: 0, threats: 0, reactions: [], turns: 0 };
+}
+// a threat starts the clock when it is about two seconds out
+function trackThreats(cur) {
+  const horizon = game.speed * 2.2;
+  for (const ob of cur.obstacles) {
+    if (ob.smashed || ob.threatAt !== undefined) continue;
+    const d = ob.s - player.s;
+    if (d <= 0 || d > horizon) continue;
+    if (ob.type === 'rock' && ob.lane !== player.lane) continue;
+    ob.threatAt = game.rtime;
+    game.stats.threats++;
+  }
+  // boss bursts heading for the jet count as one threat each
+  let incoming = false;
+  for (const b of bullets) {
+    if (!b.boss || b.decoy || b.st !== player.st) continue;
+    const r = b.s - player.s;
+    if (r > 0 && r < 45 && Math.abs(b.x - player.x) < 1.3) { incoming = true; break; }
+  }
+  if (incoming && game.burstAt === 0) { game.burstAt = game.rtime; game.stats.threats++; }
+  if (!incoming && game.burstAt !== 0) game.burstAt = 0;
+}
+// the right move stops the clock for the nearest matching threat
+function react(kind) {
+  if (!game.stats || game.state !== 'playing') return;
+  const st = game.stats;
+  let best = null;
+  for (const ob of player.st.obstacles) {
+    if (ob.threatAt === undefined || ob.answered || ob.s < player.s) continue;
+    const ok = kind === 'loop'
+      || (ob.type === 'fence' && kind === 'climb')
+      || (ob.type === 'gate' && kind === 'dive')
+      || (ob.type === 'rock' && !ob.smashed && (kind === 'fire' || kind === 'climb' || kind === 'dive' || (kind === 'lane' && ob.lane !== player.lane)));
+    if (ok && (!best || ob.s < best.s)) best = ob;
+  }
+  if (best) { best.answered = true; st.reactions.push(game.rtime - best.threatAt); }
+  if (game.burstAt > 0 && ['flares', 'roll', 'lane', 'loop'].includes(kind)) { st.reactions.push(game.rtime - game.burstAt); game.burstAt = -1; }
+}
+
+function evaluatePilot() {
+  const st = game.stats || freshStats();
+  const rx = st.reactions.filter((r) => r >= 0 && r < 3);
+  const avg = rx.length ? rx.reduce((a, b) => a + b, 0) / rx.length : null;
+  const fastest = rx.length ? Math.min(...rx) : null;
+  const acc = st.missiles ? Math.min(1, st.hits / st.missiles) : null;
+  const handledN = Math.max(0, st.threats - Math.min(st.impacts, st.threats));
+  const handled = st.threats ? handledN / st.threats : null;
+  let pts = 0;
+  pts += avg === null ? 18 : clamp(35 - ((avg - 0.35) / 0.85) * 30, 5, 35);
+  pts += acc === null ? 12 : 25 * acc;
+  pts += handled === null ? 15 : 25 * handled;
+  if (st.flares && st.decoyed) pts += 5;
+  if (st.rolls + st.loops > 0) pts += 5;
+  if (st.wingmen <= 1) pts += 5;
+  pts = lerp(55, pts, clamp((rx.length + st.missiles) / 8, 0.25, 1)); // short runs say little
+  const grade = pts >= 88 ? 'S' : pts >= 75 ? 'A' : pts >= 60 ? 'B' : pts >= 45 ? 'C' : 'D';
+  const ms = (v) => (v === null ? '–' : `${Math.round(v * 1000)} ms`);
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const rows = [
+    ['Avg. reaction', ms(avg)],
+    ['Fastest reaction', ms(fastest)],
+    ['Threats handled', st.threats ? `${handledN} / ${st.threats}` : '–'],
+    ['Missile hits', st.missiles ? `${st.hits} / ${st.missiles} (${pct(acc)})` : 'none fired'],
+    ['Shot down', `${st.bandits} bandits · ${st.mines} mines` + (st.bossHits ? ` · ${st.bossHits} boss hits` : '')],
+    ['Flares', st.flares ? `${st.flares} · ${st.decoyed} rounds decoyed` : 'not used'],
+    ['Manoeuvres', `${st.rolls} rolls · ${st.loops} loops`],
+    ['Slow-mo · wingmen', `${st.slowmo} · ${st.wingmen} used`],
+  ];
+  const notes = [];
+  if (avg !== null && avg < 0.45) notes.push('Lightning reflexes: you answer threats in under half a second.');
+  else if (avg !== null && avg > 0.9) notes.push(`React earlier: threats took you ${avg.toFixed(1)} s on average to answer.`);
+  if (st.missiles >= 4 && acc < 0.35) notes.push(`Trigger-happy: only ${pct(acc)} of your missiles hit. Fire when a target is lined up.`);
+  else if (st.missiles >= 3 && acc >= 0.7) notes.push('Sharp shooting: most of your missiles found a target.');
+  else if (st.missiles === 0) notes.push('You never fired a missile. Space shoots down mines and bandits for bonus points.');
+  if (st.impacts > 0) notes.push(`You took ${st.impacts} hit${st.impacts > 1 ? 's' : ''} that a shield or wingman had to absorb.`);
+  if ((game.boss || game.bossDone) && st.flares === 0) notes.push('Try flares (Q or a shout) against boss fire.');
+  if (st.rolls + st.loops === 0 && notes.length < 3) notes.push('Barrel rolls (Shift + arrow) and loops (E) get you out of tight spots.');
+  if (!notes.length) notes.push('Clean flying. Keep it up!');
+  return { grade, pts: Math.round(pts), rows, notes: notes.slice(0, 3) };
+}
+
+function renderDebrief(el) {
+  const ev = evaluatePilot();
+  el.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'db-head';
+  const g = document.createElement('div'); g.className = `grade g-${ev.grade}`; g.textContent = ev.grade;
+  const t = document.createElement('div');
+  const tt = document.createElement('div'); tt.className = 'db-title'; tt.textContent = 'Pilot debrief';
+  const tr = document.createElement('div'); tr.className = 'db-rating'; tr.textContent = `Rating ${ev.pts} / 100 · reactions and weapon use`;
+  t.append(tt, tr); head.append(g, t);
+  const grid = document.createElement('div'); grid.className = 'db-grid';
+  for (const [k, v] of ev.rows) {
+    const r = document.createElement('div'); r.className = 'db-row';
+    const a = document.createElement('span'); a.textContent = k;
+    const b = document.createElement('b'); b.textContent = v;
+    r.append(a, b); grid.appendChild(r);
+  }
+  const ul = document.createElement('ul'); ul.className = 'db-notes';
+  for (const n of ev.notes) { const li = document.createElement('li'); li.textContent = n; ul.appendChild(li); }
+  el.append(head, grid, ul);
+}
+
 function logEvent(type, pos = player.pos) { game.pathEvents.push({ type, x: pos.x, z: pos.z }); }
 
 function stumble() {
@@ -1510,7 +1648,7 @@ function smash(ob, st, byMissile) {
   burst(_v, ob.type === 'rock' ? 0xffa040 : 0xff5070, byMissile ? 28 : 18);
   puff(_v, 6, 1.6);
   sfx('boom');
-  if (byMissile) { game.score += 50 * game.mult; hud.toast(`+${50 * game.mult}`); logEvent('mine', _v); }
+  if (byMissile) { game.score += 50 * game.mult; hud.toast(`+${50 * game.mult}`); logEvent('mine', _v); game.stats.hits++; game.stats.mines++; }
 }
 
 function killEnemy(e, byMissile) {
@@ -1522,6 +1660,8 @@ function killEnemy(e, byMissile) {
   shake = Math.max(shake, 0.2);
   if (byMissile) {
     logEvent('kill', e.mesh.position);
+    game.stats.hits++;
+    game.stats.bandits++;
     game.kills++;
     game.score += 150 * game.mult;
     hud.toast(`Splash one! +${150 * game.mult}`);
@@ -1529,7 +1669,7 @@ function killEnemy(e, byMissile) {
 }
 
 function hitObstacle(ob) {
-  if (player.shield > 0 || game.levelClear) { smash(ob, player.st, false); shake = 0.25; return; }
+  if (player.shield > 0 || game.levelClear) { if (!game.levelClear) game.stats.impacts++; smash(ob, player.st, false); shake = 0.25; return; }
   if (ob.type === 'rock' && game.wingmen > 0) { wingmanSave(ob); return; }
   die(ob.type);
 }
@@ -1556,6 +1696,8 @@ function wingmanBlock(hit) {
 function launchWingman(target, msg) {
   game.wingmen--;
   logEvent('wingman');
+  game.stats.wingmen++;
+  game.stats.impacts++;
   wing.target.copy(target);
   wing.side = player.x <= 0 ? 1 : -1;
   wing.t = 0;
@@ -1635,6 +1777,202 @@ function placeBoss(dt, b) {
   if (b.pulse > 0) { b.pulse -= dt; b.mesh.scale.setScalar(1 + Math.max(0, b.pulse) * 0.4); } else b.mesh.scale.setScalar(1);
 }
 
+// ---------- after a won level: land at a sky airbase and taxi into the hangar ----------
+const RW_Y = -8;        // runway deck height
+const RW_T = -50;       // threshold, metres ahead of where the approach starts
+const RW_LEN = 260;
+const Z_TD = -92;       // touchdown point
+const Z_EXIT = -137;    // where the jet turns off the runway
+const HANGAR_X = 26;    // hangar door, metres to the right of the runway centre
+const GROUND = RW_Y + 0.62; // jet height with the wheels on the deck
+const smooth = (u) => u * u * (3 - 2 * u);
+let landing = null;
+
+function buildAirbase(origin, yaw) {
+  const g = new THREE.Group();
+  g.position.set(origin.x, 0, origin.z);
+  g.rotation.y = yaw;
+  const deckY = RW_Y - 0.5;
+  mesh(boxGeo(16, 1, RW_LEN), M.asphalt, 0, deckY, RW_T - RW_LEN / 2, g);
+  for (let z = RW_T - 14; z > RW_T - RW_LEN + 10; z -= 12) mesh(boxGeo(0.35, 0.02, 5), M.rwPaint, 0, RW_Y + 0.01, z, g);
+  for (let i = 0; i < 8; i++) mesh(boxGeo(0.9, 0.02, 7), M.rwPaint, (i < 4 ? -6.6 : 1.8) + (i % 4) * 1.6, RW_Y + 0.01, RW_T - 6, g);
+  for (const z of [Z_TD + 10, Z_TD - 6, Z_TD - 22]) for (const sx of [-1, 1]) mesh(boxGeo(1.6, 0.02, 7), M.rwPaint, sx * 3.6, RW_Y + 0.01, z, g);
+  for (let z = RW_T; z > RW_T - RW_LEN; z -= 10) for (const sx of [-1, 1]) mesh(G.bead, M.rwLight, sx * 8, RW_Y + 0.12, z, g);
+  for (let x = -8; x <= 8; x += 1.6) mesh(G.bead, M.navGreenL, x, RW_Y + 0.12, RW_T + 0.5, g);
+  // approach light bars with a running strobe ("rabbit")
+  const rabbit = [];
+  for (let k = 0; k < 7; k++) {
+    const z = RW_T + 10 + k * 9;
+    const row = new THREE.Group();
+    row.position.set(0, RW_Y + 0.4, z);
+    for (let x = -3; x <= 3; x += 1.5) mesh(G.bead, M.rwLight, x, 0, 0, row);
+    mesh(boxGeo(7, 0.12, 0.12), M.frame, 0, -0.1, 0, row);
+    mesh(cylGeo(0.15, 0.25, 12, 6), M.frame, 0, -6.2, 0, row);
+    g.add(row);
+    rabbit.push(mesh(G.beacon, M.rwStrobe, 0, RW_Y + 0.75, z, g));
+  }
+  // taxiway: the turn-off and the lane to the hangar
+  const zt = Z_EXIT - 9;
+  const hx = HANGAR_X + 12;
+  mesh(boxGeo(16, 1, 16), M.asphalt, 6, deckY, Z_EXIT - 6, g);
+  mesh(boxGeo(hx + 12 - 8, 1, 12), M.asphalt, (8 + hx + 12) / 2, deckY, zt, g);
+  const taxi = [];
+  for (let i = 0; i <= 10; i++) { const a = (i / 10) * (Math.PI / 2); taxi.push([9 - 9 * Math.cos(a), Z_EXIT - 9 * Math.sin(a)]); }
+  for (let x = 11; x <= hx; x += 2) taxi.push([x, zt]);
+  for (let i = 1; i < taxi.length; i++) {
+    const [x1, z1] = taxi[i - 1];
+    const [x2, z2] = taxi[i];
+    const seg = mesh(boxGeo(0.25, 0.02, Math.hypot(x2 - x1, z2 - z1) * 0.6), M.taxiLine, (x1 + x2) / 2, RW_Y + 0.02, (z1 + z2) / 2, g);
+    seg.rotation.y = Math.atan2(x2 - x1, z2 - z1);
+  }
+  // the hangar, door facing the runway
+  const H = new THREE.Group();
+  H.position.set(hx, RW_Y, zt);
+  g.add(H);
+  mesh(boxGeo(1, 9, 22), M.hangar, 12, 4.5, 0, H);
+  for (const sz of [-1, 1]) mesh(boxGeo(24, 9, 1), M.hangar, 0, 4.5, sz * 11, H);
+  mesh(new THREE.CylinderGeometry(11, 11, 24, 18, 1, true, 0, Math.PI).rotateZ(Math.PI / 2), M.hangarRoof, 0, 9, 0, H);
+  for (const sz of [-1, 1]) mesh(boxGeo(1, 9, 1), M.frame, -12, 4.5, sz * 11, H);
+  for (const z of [-6, 0, 6]) mesh(boxGeo(20, 0.15, 0.6), M.hangarLight, 0, 8.6, z, H);
+  mesh(boxGeo(0.3, 0.03, 8), M.taxiLine, 4, 0.05, 0, H);
+  for (let i = -3; i <= 3; i++) mesh(boxGeo(0.12, 1.2, 1.4), i % 2 ? M.warn : M.frame, -12.6, 10.5 + Math.cos(i * 0.4) * 0.6, i * 1.4, H);
+  // a marshaller waving the jet in
+  const m = ej.pilot.clone();
+  m.remove(m.children[m.children.length - 1]); // no parachute
+  m.position.set(8, 0.65, 0);
+  m.rotation.set(0, Math.PI / 2, 0);
+  m.scale.setScalar(1.5);
+  const arms = m.children.filter((c) => c.isGroup && Math.abs(Math.abs(c.position.x) - 0.23) < 0.01);
+  for (const a of arms) mesh(boxGeo(0.06, 0.4, 0.06), M.warn, 0, -0.62, 0, a);
+  for (const l of m.children.filter((c) => c.isGroup && Math.abs(Math.abs(c.position.x) - 0.1) < 0.01 && c.position.y === 0)) l.rotation.set(0, 0, 0);
+  H.add(m);
+  // control tower
+  mesh(cylGeo(1.4, 1.8, 13, 8), M.hangar, -18, RW_Y + 6, Z_TD - 12, g);
+  mesh(cylGeo(2.7, 2.2, 2.6, 8), M.glass, -18, RW_Y + 13.6, Z_TD - 12, g);
+  mesh(cylGeo(3, 3, 0.4, 8), M.frame, -18, RW_Y + 15.1, Z_TD - 12, g);
+  // the base floats on big pylons, with clouds around it
+  for (const [x, z] of [[0, RW_T - 30], [0, RW_T - 140], [0, RW_T - 240], [hx, zt]]) mesh(cylGeo(2.6, 4, 70, 8), M.frame, x, RW_Y - 36, z, g);
+  for (let i = 0; i < 12; i++) cloud(g, rand(-40, 70), RW_Y - rand(8, 22), rand(-260, 10), rand(3, 6), true);
+  scene.add(g);
+  return { group: g, rabbit, arms, taxi };
+}
+
+function startLanding() {
+  game.state = 'landing';
+  endSlowmo(true);
+  hideTurnHint();
+  show(ui.hud, false);
+  show(ui.landingUi, true);
+  const lv = LEVELS[game.level - 1];
+  ui.landKicker.textContent = lv.n === LEVELS.length ? 'Campaign complete' : `Level ${lv.n} · ${lv.name} cleared`;
+  ui.landCap.textContent = 'Returning to base';
+  clearEnemies();
+  for (const m of missiles) m.mesh.visible = false;
+  for (const st of straights) st.group.visible = false;
+  drone.root.visible = false;
+  jet.bubble.visible = false;
+  updatePlayerWorld();
+  const base = buildAirbase(player.pos, yawOf(player.st.dir));
+  const v0 = Math.max(12, game.speed);
+  const vt = clamp(v0 * 0.75, 12, 22);
+  landing = {
+    ...base, phase: 'approach', t: 0, v0, vt, TA: (2 * Math.abs(Z_TD)) / (v0 + vt), y0: player.alt,
+    x: 0, y: player.alt, z: 0, yaw: 0, pitch: 0, roll: jet.baseRoll, gearOut: false, d: 0, done: false,
+    camPos: camera.position.clone(), look: player.pos.clone(),
+  };
+  setMusicTrack('cruise');
+}
+
+function finishLanding() {
+  if (!landing || landing.done) return;
+  landing.done = true;
+  ui.fade.classList.add('on');
+  setTimeout(() => {
+    show(ui.landingUi, false);
+    showLevelResults();
+    ui.fade.classList.remove('on');
+  }, 480);
+}
+
+function updateLanding(dt) {
+  const L = landing;
+  if (!L) return;
+  L.t += dt;
+  if (L.phase === 'approach') {
+    const u = clamp(L.t / L.TA, 0, 1);
+    const tt = Math.min(L.t, L.TA);
+    L.z = -(L.v0 * tt + ((L.vt - L.v0) * tt * tt) / (2 * L.TA));
+    L.y = lerp(L.y0, GROUND, smooth(u));
+    L.pitch = lerp(L.pitch, u > 0.8 ? 0.13 : -0.07, damp(4, dt)); // nose down on the glide path, flare at the end
+    L.roll = lerp(L.roll, 0, damp(3, dt));
+    if (!L.gearOut && u > 0.15) { L.gearOut = true; jet.gear.visible = true; jet.gear.scale.setScalar(0.01); sfx('gear'); ui.landCap.textContent = 'Gear down · on approach'; }
+    if (u >= 1) {
+      L.phase = 'rollout'; L.t = 0; L.TB = (2 * Math.abs(Z_EXIT - Z_TD)) / (L.vt + 6);
+      sfx('screech');
+      ui.landCap.textContent = 'Touchdown';
+      for (const sx of [-0.55, 0.55]) { _v.set(sx, GROUND - 0.5, L.z); L.group.localToWorld(_v); puff(_v, 6, 0.9, 1.1, 0xd8d8d8); }
+      shake = 0.15;
+    }
+  } else if (L.phase === 'rollout') {
+    const tt = Math.min(L.t, L.TB);
+    L.z = Z_TD - (L.vt * tt + ((6 - L.vt) * tt * tt) / (2 * L.TB));
+    L.y = GROUND;
+    L.pitch = lerp(L.pitch, 0, damp(3, dt));
+    if (L.t < 0.6 && Math.random() < 0.6) { _v.set(0, GROUND - 0.5, L.z + 1.5); L.group.localToWorld(_v); puff(_v, 1, 0.6, 0.9, 0xd8d8d8); }
+    if (L.t >= L.TB) { L.phase = 'taxi'; L.t = 0; L.d = 0; ui.landCap.textContent = 'Taxiing to the hangar'; }
+  } else if (L.phase === 'taxi' || L.phase === 'stop') {
+    const pts = L.taxi;
+    let total = 0;
+    const seg = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); total += l; }
+    if (L.phase === 'taxi') {
+      const left = total - L.d;
+      L.d = Math.min(total, L.d + Math.min(11, 6 + L.t * 6, Math.max(1.5, left * 1.6)) * dt);
+      if (L.d >= total - 0.05) { L.phase = 'stop'; L.t = 0; ui.landCap.textContent = 'Welcome home, pilot'; sfx('victory'); }
+    }
+    let d = L.d;
+    let i = 0;
+    while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+    const a = pts[i], b = pts[i + 1];
+    const f = clamp(d / seg[i], 0, 1);
+    L.x = lerp(a[0], b[0], f);
+    L.z = lerp(a[1], b[1], f);
+    L.yaw = lerpAngle(L.yaw, Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])), damp(8, dt));
+    L.y = GROUND;
+    if (L.phase === 'stop' && L.t > 1.4) finishLanding();
+  }
+  // the marshaller waves, the approach strobe runs
+  for (const [k, arm] of L.arms.entries()) arm.rotation.set(0, 0, (k ? 1 : -1) * (2.3 + Math.sin(game.time * 6) * 0.5));
+  L.rabbit.forEach((r, k) => { r.visible = Math.floor(L.t * 9) % L.rabbit.length === L.rabbit.length - 1 - k; });
+  if (L.gearOut) jet.gear.scale.setScalar(Math.min(1, jet.gear.scale.x + dt * 2.5));
+  // place the jet
+  _v.set(L.x, L.y, L.z);
+  L.group.localToWorld(_v);
+  jet.root.position.copy(_v);
+  jet.root.rotation.y = L.group.rotation.y + L.yaw;
+  jet.air.rotation.set(L.pitch, 0, L.roll);
+  jet.flame.scale.set(1, 1, L.phase === 'approach' ? 0.55 : 0.2);
+  // cameras: chase on approach, runway side at touchdown, wide shot of the taxi
+  const fx = -Math.sin(jet.root.rotation.y);
+  const fz = -Math.cos(jet.root.rotation.y);
+  if (L.phase === 'approach') {
+    _v2.set(_v.x - fx * 10, _v.y + 4.2, _v.z - fz * 10);
+    _v3.set(_v.x + fx * 14, _v.y - 1.2, _v.z + fz * 14);
+  } else if (L.phase === 'rollout') {
+    _v2.set(-13, RW_Y + 2.4, Z_TD - 34); L.group.localToWorld(_v2);
+    _v3.copy(_v);
+  } else {
+    _v2.set(-4, RW_Y + 7, Z_EXIT - 9 + 22); L.group.localToWorld(_v2);
+    _v3.copy(_v);
+  }
+  L.camPos.lerp(_v2, damp(L.phase === 'approach' ? 5 : 2.2, dt));
+  L.look.lerp(_v3, damp(5, dt));
+  camera.position.copy(L.camPos);
+  camera.lookAt(L.look);
+  camera.fov = lerp(camera.fov, camera.aspect < 0.9 ? 72 : 58, damp(2, dt));
+  camera.updateProjectionMatrix();
+}
+
 function updateBoss(dt) {
   const b = game.boss;
   if (!b) return;
@@ -1658,7 +1996,7 @@ function updateBoss(dt) {
       puff(b.mesh.position, 14, 3);
       sfx('boom');
       removeBoss();
-      levelComplete();
+      startLanding();
     }
     return;
   }
@@ -1947,6 +2285,7 @@ function updatePlaying(dt) {
     if (game.state !== 'playing') return;
   }
 
+  trackThreats(cur);
   updateEnemies(dt, prevS);
   if (game.state !== 'playing') return;
   if (game.mode === 'campaign') {
@@ -2119,6 +2458,8 @@ function updateMissiles(dt) {
     let dead = m.t > 1.8 || m.s > m.st.L + HALF + 2 || m.st.dead;
     const bo = game.boss;
     if (!dead && bo && !bo.dying && bo.st === m.st && m.s >= bo.s - 3 && Math.abs(m.x - bo.x) < 3 && Math.abs(m.y - (bo.liftY ?? bo.y)) < 2.6) {
+      game.stats.hits++;
+      game.stats.bossHits++;
       hitBoss();
       dead = true;
     }
@@ -2381,6 +2722,13 @@ function animateWorld(dt) {
   }
 }
 
+function followSky() {
+  skyGroup.position.copy(camera.position);
+  cloudSea.position.x = camera.position.x;
+  cloudSea.position.z = camera.position.z;
+  if (water.visible) updateWater();
+}
+
 function updateCamera(dt) {
   const targetYaw = yawOf(player.st.dir);
   game.camYaw = lerpAngle(game.camYaw, targetYaw, damp(game.state === 'menu' ? 3 : 6, dt));
@@ -2417,10 +2765,7 @@ function updateCamera(dt) {
   camera.fov = lerp(camera.fov, fovTarget, damp(2, dt));
   camera.updateProjectionMatrix();
 
-  skyGroup.position.copy(camera.position);
-  cloudSea.position.x = camera.position.x;
-  cloudSea.position.z = camera.position.z;
-  if (water.visible) updateWater();
+  followSky();
   sun.position.set(player.pos.x + 14, 32, player.pos.z + 10);
   sun.target.position.set(player.pos.x, 0, player.pos.z);
 }
@@ -2525,6 +2870,8 @@ function sfx(name) {
     case 'slowIn': tone(t, 420, 0.7, 'sawtooth', 0.12, 60, master, 900); noise(t, 0.6, 0.25, 500, 0.5, 'lowpass'); break;
     case 'slowOut': tone(t, 80, 0.4, 'sawtooth', 0.1, 600, master, 2400); noise(t, 0.4, 0.3, 1800, 0.5); break;
     case 'heartbeat': tone(t, 60, 0.12, 'sine', 0.5, 40); tone(t + 0.16, 55, 0.12, 'sine', 0.35, 38); break;
+    case 'gear': tone(t, 140, 0.18, 'square', 0.12, 70); noise(t + 0.05, 0.25, 0.25, 600, 0.6); break;
+    case 'screech': noise(t, 0.5, 0.35, 2600, 6); noise(t + 0.08, 0.35, 0.25, 3200, 6); tone(t, 90, 0.3, 'sine', 0.4, 40); break;
     case 'heard': tone(t, 1320, 0.07, 'sine', 0.08); tone(t + 0.07, 1760, 0.09, 'sine', 0.08); break;
     case 'thunder': noise(t, 2.2, 0.5, 120, 0.4, 'lowpass'); noise(t + 0.05, 0.5, 0.35, 400, 0.6, 'lowpass'); break;
     case 'drop': tone(t, 700, 0.35, 'sine', 0.08, 250); break;
@@ -2704,6 +3051,8 @@ const ui = {
   voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'), micSens: $('micSens'), micSensVal: $('micSensVal'), micThr: $('micThr'),
   smPrompt: $('smPrompt'), smBar: $('smBar'), slowSub: $('slowSub'),
   mapOver: $('mapOver'), legendOver: $('legendOver'), mapDone: $('mapDone'), legendDone: $('legendDone'),
+  debriefOver: $('debriefOver'), debriefDone: $('debriefDone'),
+  landingUi: $('landingUi'), landCap: $('landCap'), landKicker: $('landKicker'), fade: $('fade'),
 };
 const PLANE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1.6 6.2 7.9 5.3v2.2l-7.6-2.6-.6 5.4 2.9 2v1.8L12 21l-4.2.8V20l2.9-2-.6-5.4-7.6 2.6V13l7.9-5.3z"/></svg>';
 function renderWingmen() {
@@ -3152,7 +3501,7 @@ function renderCampaign() {
 function openCampaign() { initAudio(); renderCampaign(); show(ui.menu, false); show(ui.campaign, true); }
 function closeCampaign() { show(ui.campaign, false); show(ui.menu, true); }
 
-function levelComplete() {
+function showLevelResults() {
   game.state = 'levelDone';
   endSlowmo(true);
   stopMusic();
@@ -3174,7 +3523,7 @@ function levelComplete() {
   show(ui.levelDone, true);
   game.path.push([player.pos.x, player.pos.z]);
   drawFlightMap(ui.mapDone, ui.legendDone, 'win');
-  sfx('victory');
+  renderDebrief(ui.debriefDone);
 }
 
 function pauseGame() {
@@ -3242,6 +3591,7 @@ function gameOver() {
   show(ui.hud, false);
   show(ui.over, true);
   drawFlightMap(ui.mapOver, ui.legendOver, game.deathKind === 'eject' ? 'eject' : 'crash');
+  renderDebrief(ui.debriefOver);
   // the callsign box is not focused, so Space and Enter go straight to "Fly again"
 }
 
@@ -3299,6 +3649,10 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  if (game.state === 'landing') {
+    if (k === 'Enter' || k === ' ' || k === 'Escape') finishLanding();
+    return;
+  }
   if (game.state === 'levelDone') {
     if (k === 'Enter' || k === ' ') ui.ldNext.click();
     return;
@@ -3348,7 +3702,8 @@ canvas.addEventListener('touchend', () => {
   if (touch && !touch.used) actFire();
   touch = null;
 }, { passive: true });
-canvas.addEventListener('mousedown', (e) => { if (e.button === 0) actFire(); });
+canvas.addEventListener('mousedown', (e) => { if (e.button !== 0) return; if (game.state === 'landing') finishLanding(); else actFire(); });
+$('skipBtn').addEventListener('click', finishLanding);
 
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 window.addEventListener('blur', pauseGame);
@@ -3366,7 +3721,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
-  if (game.state === 'playing') updateSlowmo(dt);
+  if (game.state === 'playing') { updateSlowmo(dt); game.rtime += dt; }
   const rdt = dt;
   const gdt = dt * game.timeScale; // slow motion scales game time, not the camera or the UI
   if (game.state !== 'paused') game.time += gdt;
@@ -3380,11 +3735,13 @@ function frame(now) {
     updateSmoke(gdt);
     updateFlares(gdt);
     updateFlyingCoins(gdt);
-    animateJet(gdt);
+    const cinematic = landing && (game.state === 'landing' || game.state === 'levelDone');
+    if (game.state === 'landing') updateLanding(rdt);
+    if (!cinematic) animateJet(gdt);
     animateDrone(gdt);
     animateWingman(gdt);
     animateWorld(gdt);
-    updateCamera(rdt);
+    if (cinematic) followSky(); else updateCamera(rdt);
     updateDust();
   }
   if (game.state === 'playing') hud.update();
@@ -3400,7 +3757,7 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
-  deployFlares, voiceHeard, bullets, startSlowmo,
+  deployFlares, voiceHeard, bullets, startSlowmo, finishLanding, getLanding: () => landing, evaluatePilot,
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },
