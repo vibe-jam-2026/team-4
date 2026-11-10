@@ -2,6 +2,10 @@
 // Plain ES module + Three.js (vendored). No build step.
 import * as THREE from './vendor/three.module.min.js';
 
+// Version: bump on every published iteration (see CHANGELOG.md)
+const VERSION = 'v12';
+const VERSION_DATE = '2026-11-10';
+
 // ============================================================ helpers
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.floor(rand(a, b + 1));
@@ -1344,7 +1348,12 @@ function actSide(side, roll = false) {
     game.score += 10 * game.mult;
     sfx('roll');
   }
-  if (!tryTurn(side)) { const before = player.lane; changeLane(side); if (player.lane !== before) react('lane'); }
+  // Near a corner the press queues the turn, but it still moves you a lane too, so you can
+  // dodge right up to the corner (before, the turn swallowed the lane change).
+  tryTurn(side);
+  const before = player.lane;
+  changeLane(side);
+  if (player.lane !== before) react('lane');
 }
 function actClimb() {
   if (game.state !== 'playing' || player.air || player.looping) return;
@@ -3049,6 +3058,7 @@ const ui = {
   flareBtn: $('flareBtn'), flareSub: $('flareSub'), flareFill: $('flareFill'),
   micBadge: $('micBadge'), micLabel: $('micLabel'), micLevelBar: document.querySelector('#micLevel i'),
   voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'), micSens: $('micSens'), micSensVal: $('micSensVal'), micThr: $('micThr'),
+  micTest: $('micTest'), micTestMsg: $('micTestMsg'), micTestBar: document.querySelector('#micTestBar i'), micTestThr: document.querySelector('#micTestBar u'),
   smPrompt: $('smPrompt'), smBar: $('smBar'), slowSub: $('slowSub'),
   mapOver: $('mapOver'), legendOver: $('legendOver'), mapDone: $('mapDone'), legendDone: $('legendDone'),
   debriefOver: $('debriefOver'), debriefDone: $('debriefDone'),
@@ -3106,7 +3116,6 @@ const hud = {
     ui.flareFill.style.width = cd ? `${(1 - game.flareCd / FLARE_COOLDOWN) * 100}%` : '100%';
     this.set('flsub', ui.flareSub, game.flareT > 0 ? 'Decoying!' : cd ? `Ready in ${Math.ceil(game.flareCd)}s` : voice.on ? 'Shout · Q · tap' : 'Q · tap');
     this.set('slsub', ui.slowSub, game.slowT > 0 ? 'Slow-mo!' : game.slowCd > 0 ? `Slow-mo in ${Math.ceil(game.slowCd)}s` : 'Slow-mo ready · Z');
-    updateMicMeter();
     const camp = game.mode === 'campaign';
     const b = game.boss;
     show(ui.levelBar, camp && !b);
@@ -3145,12 +3154,13 @@ const hud = {
 // We open the default microphone (on a laptop, the built-in one) and watch its level. The game
 // learns the room's background noise and fires when a sudden sound rises well above it, so a
 // shout of "Flares!", a clap or a bang on the desk all work. Nothing is recorded or sent.
+// RMS levels: a shout into a laptop mic after echo cancellation is often only 0.03-0.15
 const SENS_STEPS = [
-  { name: 'Low', ratio: 6, min: 0.2 },
-  { name: 'Lower', ratio: 4.8, min: 0.14 },
-  { name: 'Normal', ratio: 3.8, min: 0.1 },
-  { name: 'Higher', ratio: 3, min: 0.07 },
-  { name: 'High', ratio: 2.4, min: 0.045 },
+  { name: 'Low', ratio: 5, min: 0.06 },
+  { name: 'Lower', ratio: 4, min: 0.04 },
+  { name: 'Normal', ratio: 3.2, min: 0.025 },
+  { name: 'Higher', ratio: 2.6, min: 0.016 },
+  { name: 'High', ratio: 2.1, min: 0.01 },
 ];
 const voice = { on: false, stream: null, analyser: null, data: null, label: 'Microphone', floor: 0.01, hot: 0, lastHit: 0, sens: clamp(store.get('wowf.micSens', 3), 1, 5) };
 
@@ -3182,6 +3192,10 @@ async function startVoice() {
   voice.analyser.fftSize = 1024;
   voice.data = new Float32Array(voice.analyser.fftSize);
   actx.createMediaStreamSource(voice.stream).connect(voice.analyser);
+  // some browsers only process nodes that reach the speakers: route it there silently
+  const silent = actx.createGain();
+  silent.gain.value = 0;
+  voice.analyser.connect(silent).connect(actx.destination);
   voice.floor = 0.01;
   voice.on = true;
   store.set('wowf.voice', true);
@@ -3193,6 +3207,7 @@ function stopVoice() {
   if (voice.stream) { voice.stream.getTracks().forEach((t) => t.stop()); voice.stream = null; }
   voice.analyser = null;
   store.set('wowf.voice', false);
+  show(ui.micTest, false);
   updateVoiceUi();
 }
 
@@ -3204,11 +3219,13 @@ function updateVoiceUi() {
   ui.micSensVal.textContent = SENS_STEPS[voice.sens - 1].name;
   ui.micSens.value = voice.sens;
   show(ui.micBadge, voice.on);
+  show(ui.micTest, voice.on);
 }
 
 // called every frame during a run: meter, background-noise tracking and the trigger
 function updateMicMeter() {
   if (!voice.on || !voice.analyser) return;
+  if (actx && actx.state === 'suspended') actx.resume();
   voice.analyser.getFloatTimeDomainData(voice.data);
   let sum = 0;
   for (let i = 0; i < voice.data.length; i++) sum += voice.data[i] * voice.data[i];
@@ -3220,13 +3237,25 @@ function updateMicMeter() {
     voice.hot = 0;
   } else if (++voice.hot >= 2) { // loud for two frames in a row: a real shout, not a click
     voice.hot = -12;
-    voiceHeard();
+    if (game.state === 'playing') voiceHeard();
+    else {
+      // menu test: show that a shout would fire flares
+      ui.micTest.classList.add('heard');
+      ui.micTestMsg.textContent = 'Heard you! Flares would fire ✓';
+      sfx('heard');
+      clearTimeout(voice.testTimer);
+      voice.testTimer = setTimeout(() => { ui.micTest.classList.remove('heard'); ui.micTestMsg.textContent = 'Shout to test the microphone'; }, 1500);
+    }
   }
-  // meter: the yellow tick marks the trigger level
+  // meters: the yellow tick marks the trigger level
   const scale = threshold * 1.6;
-  ui.micLevelBar.style.width = `${Math.min(100, (rms / scale) * 100)}%`;
-  ui.micLevelBar.classList.toggle('hot', rms >= threshold);
-  ui.micThr.style.left = `${(threshold / scale) * 100}%`;
+  const w = `${Math.min(100, (rms / scale) * 100)}%`;
+  const thr = `${(threshold / scale) * 100}%`;
+  for (const [bar, tick] of [[ui.micLevelBar, ui.micThr], [ui.micTestBar, ui.micTestThr]]) {
+    bar.style.width = w;
+    bar.classList.toggle('hot', rms >= threshold);
+    tick.style.left = thr;
+  }
 }
 
 // ---------- leaderboard (local storage) ----------
@@ -3444,8 +3473,10 @@ function refreshMenuStats() {
   ui.bankMenu.textContent = fmt(game.bank);
 }
 
+function resumeVoice() { if (!voice.on && store.get('wowf.voice', false)) startVoice(); }
 function startRun() {
   initAudio();
+  resumeVoice();
   commitPending();
   if (game.state !== 'menu' || game.mode !== 'endless') newGame({ mode: 'endless' });
   game.state = 'playing';
@@ -3458,6 +3489,7 @@ function startRun() {
 
 function startCampaign(level, carry = 0) {
   initAudio();
+  resumeVoice();
   commitPending();
   newGame({ mode: 'campaign', level, score: carry });
   game.state = 'playing';
@@ -3745,9 +3777,11 @@ function frame(now) {
     updateDust();
   }
   if (game.state === 'playing') hud.update();
+  updateMicMeter();
   renderer.render(scene, camera);
 }
 
+document.querySelectorAll('.ver').forEach((el) => { el.textContent = `Wings of War Forever ${VERSION} · ${VERSION_DATE}`; });
 newGame();
 game.state = 'menu';
 refreshMenuStats();
@@ -3757,7 +3791,7 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
-  deployFlares, voiceHeard, bullets, startSlowmo, finishLanding, getLanding: () => landing, evaluatePilot,
+  deployFlares, voiceHeard, bullets, startSlowmo, VERSION, actSideTest: actSide, finishLanding, getLanding: () => landing, evaluatePilot,
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },

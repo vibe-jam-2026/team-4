@@ -18,6 +18,7 @@
   </div>
   <div class="hud-right">
     <div class="coins"><span class="coin-ico"></span><span id="coins">0</span></div>
+    <span class="esc-hint"><kbd>Esc</kbd> pause</span>
     <button id="pauseBtn" class="icon-btn" aria-label="Pause">❚❚</button>
   </div>
   <button id="flareBtn" class="flare-btn" aria-label="Deploy flares"><span class="fl-name">Flares</span><span class="fl-sub" id="flareSub">Q · tap</span><span class="fl-slow" id="slowSub">Slow-mo ready</span><i id="flareFill"></i></button>
@@ -75,9 +76,11 @@
     </div>
     <div class="voice-row">
       <button id="voiceBtn" class="mid-btn">🎤 Shout for flares: off</button>
+      <div class="mic-test hidden" id="micTest"><b id="micTestBar"><i></i><u></u></b><span id="micTestMsg">Shout to test the microphone</span></div>
       <label class="sens">Mic sensitivity <input type="range" id="micSens" min="1" max="5" step="1" value="3"><span id="micSensVal">Normal</span></label>
       <div class="voice-info" id="voiceInfo">Uses your laptop's microphone. Any loud noise, like shouting "Flares!", deploys flares. Nothing is recorded or sent anywhere.</div>
     </div>
+    <div class="ver" title="Version"></div>
   </div>
 </div>
 
@@ -130,6 +133,7 @@
     <h2>Paused</h2>
     <button id="resumeBtn" class="big-btn">Resume</button>
     <button id="quitBtn" class="link-btn">Back to menu</button>
+    <div class="ver"></div>
   </div>
 </div>
 
@@ -155,6 +159,7 @@
     <button id="againBtn" class="big-btn">Fly again</button>
     <button id="overBoardBtn" class="link-btn">Leaderboard</button>
     <button id="menuBtn" class="link-btn">Menu</button>
+    <div class="ver"></div>
   </div>
 </div>
 

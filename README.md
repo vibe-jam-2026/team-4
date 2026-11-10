@@ -57,6 +57,10 @@ You start every run (and every campaign level) with three loyal wingmen, shown a
 - Rings you collect are banked. Spend them in the **Hangar** on Gripen color schemes: Sweden (50), Ukraine (100) and Brazil (150).
 - Everything is saved in the browser's local storage.
 
+### Versions
+
+Every published iteration gets a version number, shown at the bottom of the menu, the pause screen and the game-over screen. The current version is **v12**; see [CHANGELOG.md](CHANGELOG.md) for what changed in each one. To release a new iteration, bump `VERSION` and `VERSION_DATE` at the top of `game/main.js` and add an entry to the changelog.
+
 ### Running locally
 
 The game is plain static files (Three.js is copied into `game/vendor/`, the Teko and Exo 2 fonts into `game/fonts/`), so there is no build step. Serve the folder and open it:
@@ -73,7 +77,7 @@ Flares are decoys. Deploy them and, for about 2.5 seconds, boss fire locks onto 
 
 **Slow motion:** when a boss burst comes at you and your flares are ready, the game drops into slow motion. Time runs at a quarter of normal speed for up to 3 seconds, with a desaturated picture, a vignette, a slight zoom and muffled sound, so you have time to shout "Flares!". You can also trigger it yourself with **Z**. It has a 12-second cooldown and only works while flares are ready. Deploying flares snaps time back to normal.
 
-You can also deploy them by **shouting**. Click **🎤 Shout for flares** in the menu and allow microphone access. During a run, any sudden loud noise into the laptop's microphone deploys flares: shouting "Flares!", a clap, or a bang on the desk. The game learns the room's background noise and only reacts to sounds well above it. A **Mic sensitivity** slider in the menu adjusts how loud the noise has to be.
+You can also deploy them by **shouting**. Click **🎤 Shout for flares** in the menu and allow microphone access. During a run, any sudden loud noise into the laptop's microphone deploys flares: shouting "Flares!", a clap, or a bang on the desk. The game learns the room's background noise and only reacts to sounds well above it. A **Mic sensitivity** slider in the menu adjusts how loud the noise has to be, and a live test bar under the button shows "Heard you! ✓" when a shout would fire flares, so you can tune it before taking off. Once switched on, the microphone turns back on by itself at take-off.
 
 It uses the laptop's built-in microphone (the browser's default input). The menu and a small in-game badge show the microphone's name and a live level meter, with a yellow tick marking the trigger level. If the badge names a headset, switch the browser's microphone to the built-in one. The game's own sounds are filtered by the browser's echo cancellation; headphones make it even more reliable. It works in every browser, and the audio never leaves the laptop: nothing is recorded or sent.
 
