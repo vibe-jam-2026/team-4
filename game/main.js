@@ -951,6 +951,36 @@ function buildCorner(st, g) {
 
 }
 
+function buildObstacle(st, ob) {
+  const g = st.group;
+  if (ob.type === 'fence') {
+    for (const sx of [-1, 1]) ob.meshes.push(mesh(boxGeo(0.3, 2.3, 0.3), M.frame, sx * 3.0, 1.0, -ob.s, g));
+    for (const y of [0.35, 0.95, 1.55, 2.05]) ob.meshes.push(mesh(boxGeo(PATH_W, 0.07, 0.07), M.laser, 0, y, -ob.s, g));
+    ob.meshes.push(mesh(boxGeo(PATH_W, 2.0, 0.03), M.energy, 0, 1.15, -ob.s, g));
+  } else if (ob.type === 'gate') {
+    for (const sx of [-1, 1]) ob.meshes.push(mesh(boxGeo(0.4, 4.8, 0.4), M.frame, sx * 3.25, 1.9, -ob.s, g));
+    ob.meshes.push(mesh(boxGeo(PATH_W + 0.5, 0.45, 0.45), M.frame, 0, 1.22, -ob.s, g));
+    ob.meshes.push(mesh(boxGeo(PATH_W + 0.5, 0.25, 0.3), M.frame, 0, 4.2, -ob.s, g));
+    ob.meshes.push(mesh(boxGeo(PATH_W, 2.75, 0.03), M.energy, 0, 2.82, -ob.s, g));
+    for (let i = -2; i <= 2; i++) {
+      const stripe = mesh(boxGeo(0.45, 0.3, 0.04), i % 2 ? M.warn : M.frame, i * 1.2, 1.22, -ob.s - 0.24, g);
+      stripe.rotation.z = 0.5;
+      ob.meshes.push(stripe);
+    }
+    ob.meshes.push(mesh(boxGeo(PATH_W, 0.05, 0.05), M.railRed, 0, 0.98, -ob.s - 0.24, g));
+  } else if (ob.type === 'rock') {
+    buildMine(st, ob);
+  }
+}
+
+// place an obstacle on a straight after it was built (used to stage trailer shots)
+function addObstacle(st, ob) {
+  ob.meshes = ob.meshes || [];
+  st.obstacles.push(ob);
+  buildObstacle(st, ob);
+  return ob;
+}
+
 function build(st) {
   const g = st.group;
   const L = st.L;
@@ -982,26 +1012,7 @@ function build(st) {
   }
 
   // obstacles
-  for (const ob of st.obstacles) {
-    if (ob.type === 'fence') {
-      for (const sx of [-1, 1]) ob.meshes.push(mesh(boxGeo(0.3, 2.3, 0.3), M.frame, sx * 3.0, 1.0, -ob.s, g));
-      for (const y of [0.35, 0.95, 1.55, 2.05]) ob.meshes.push(mesh(boxGeo(PATH_W, 0.07, 0.07), M.laser, 0, y, -ob.s, g));
-      ob.meshes.push(mesh(boxGeo(PATH_W, 2.0, 0.03), M.energy, 0, 1.15, -ob.s, g));
-    } else if (ob.type === 'gate') {
-      for (const sx of [-1, 1]) ob.meshes.push(mesh(boxGeo(0.4, 4.8, 0.4), M.frame, sx * 3.25, 1.9, -ob.s, g));
-      ob.meshes.push(mesh(boxGeo(PATH_W + 0.5, 0.45, 0.45), M.frame, 0, 1.22, -ob.s, g));
-      ob.meshes.push(mesh(boxGeo(PATH_W + 0.5, 0.25, 0.3), M.frame, 0, 4.2, -ob.s, g));
-      ob.meshes.push(mesh(boxGeo(PATH_W, 2.75, 0.03), M.energy, 0, 2.82, -ob.s, g));
-      for (let i = -2; i <= 2; i++) {
-        const stripe = mesh(boxGeo(0.45, 0.3, 0.04), i % 2 ? M.warn : M.frame, i * 1.2, 1.22, -ob.s - 0.24, g);
-        stripe.rotation.z = 0.5;
-        ob.meshes.push(stripe);
-      }
-      ob.meshes.push(mesh(boxGeo(PATH_W, 0.05, 0.05), M.railRed, 0, 0.98, -ob.s - 0.24, g));
-    } else if (ob.type === 'rock') {
-      buildMine(st, ob);
-    }
-  }
+  for (const ob of st.obstacles) buildObstacle(st, ob);
 
   if (st.coins.length) {
     st.coinMesh = new THREE.InstancedMesh(G.ring, M.ring, st.coins.length);
@@ -3931,7 +3942,15 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
-  deployFlares, voiceHeard, bullets, startSlowmo, VERSION, actSideTest: actSide, actSpecial, SPECIALS, finishLanding, getLanding: () => landing, evaluatePilot,
+  deployFlares, voiceHeard, bullets, startSlowmo, VERSION, actSideTest: actSide, actSpecial, SPECIALS,
+  addObstacle, finishLanding, getLanding: () => landing, evaluatePilot,
+  // recording controls: music level, starting the music engine on its own
+  audio: {
+    init: initAudio,
+    startMusic,
+    stopMusic,
+    musicGain(v) { if (musicBus) musicBus.gain.value = v; },
+  },
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },
