@@ -219,3 +219,27 @@ kbd {
 @media (max-width: 420px) { .mic-badge { left: 136px; max-width: 34vw; } }
 /* tall menus scroll on short screens instead of being cut off */
 .screen { overflow-y: auto; place-items: safe center; }
+
+/* ---------- slow motion ---------- */
+#slowmo { position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0; transition: opacity .15s; }
+body.slowmo #slowmo { opacity: 1; }
+body.slowmo canvas#game { filter: saturate(.35) contrast(1.15) brightness(.95) hue-rotate(-12deg); }
+canvas#game { transition: filter .2s; }
+.sm-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 38%, rgba(4, 14, 34, .55) 72%, rgba(0, 4, 14, .9) 100%); }
+.sm-lines { position: absolute; inset: 0; opacity: .18; background: repeating-linear-gradient(0deg, #fff0 0 3px, #ffffff22 3px 4px); animation: smscan 1.2s linear infinite; }
+@keyframes smscan { to { background-position: 0 40px; } }
+.sm-box { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 0 #000a, 0 0 22px #000; }
+.sm-title { font-family: var(--display); font-size: 22px; letter-spacing: .5em; text-transform: uppercase; color: #9fd3ff; }
+.sm-prompt { font-family: var(--display); font-size: 58px; line-height: 1; font-weight: 700; color: #fff; animation: smpulse .5s ease-in-out infinite alternate; white-space: nowrap; }
+@keyframes smpulse { to { transform: scale(1.06); color: #ffd27a; } }
+.sm-bar { width: 220px; height: 5px; margin: 10px auto 0; border-radius: 3px; background: #ffffff30; overflow: hidden; }
+.sm-bar i { display: block; height: 100%; width: 100%; background: #9fd3ff; }
+.flare-btn .fl-slow { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #9fd3ff; position: relative; z-index: 1; }
+@media (max-width: 420px) { .sm-prompt { font-size: 44px; } }
+
+/* ---------- flight path map ---------- */
+.flightmap-wrap { margin: 0 0 10px; }
+.flightmap { display: block; width: 100%; height: 190px; border-radius: 12px; background: #06121f; box-shadow: inset 0 0 0 1px #9fd3ff30; }
+.map-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 6px; font-size: 11px; opacity: .85; }
+.map-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.map-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }

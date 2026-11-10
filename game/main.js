@@ -39,6 +39,9 @@ const LOOP_COOLDOWN = 1.5;
 const ROLL_TIME = 0.55;
 const FLARE_TIME = 2.6;     // how long boss fire is fooled after a flare drop
 const FLARE_COOLDOWN = 7;
+const SLOWMO_SCALE = 0.25;  // game speed during slow motion
+const SLOWMO_TIME = 3.0;    // real seconds of slow motion at most
+const SLOWMO_COOLDOWN = 12; // real seconds before it can happen again
 const POWER_TIME = { magnet: 10, shield: 8, double: 12 };
 const POWER_INFO = {
   magnet: { label: 'Tractor Beam', color: '#4d9bff' },
@@ -1077,7 +1080,8 @@ const game = {
   loopCd: 0, enemyT: 8, kills: 0,
   mode: 'endless', level: 0, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
   levelStartScore: 0, speedBonus: 0, diffOffset: 0, straightOnly: false, flash: 0, flashT: 3,
-  flareT: 0, flareCd: 0,
+  flareT: 0, flareCd: 0, timeScale: 1, slowT: 0, slowCd: 0,
+  path: [], pathEvents: [], pathNext: 0,
   best: store.get('starlane.best', 0), bank: store.get('starlane.bank', 0),
 };
 let campaign = store.get('wowf.campaign', { unlocked: 1, cleared: 0 });
@@ -1211,8 +1215,10 @@ function newGame(opts = {}) {
     score: opts.score || 0, levelStartScore: opts.score || 0,
     speedBonus: level ? Math.min(2, level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
     straightOnly: !!(level && LEVELS[level - 1].straight), flash: 0, flashT: 3,
-    flareT: 0, flareCd: 0,
+    flareT: 0, flareCd: 0, timeScale: 1, slowT: 0, slowCd: 0,
+    path: [], pathEvents: [], pathNext: 0,
   });
+  endSlowmo(true);
   for (const f of flares) f.mesh.visible = false;
   flarePool.push(...flares.splice(0).map((f) => f.mesh));
   Object.assign(player, {
@@ -1392,6 +1398,8 @@ function deployFlares(source = 'key') {
   }
   game.flareT = FLARE_TIME;
   game.flareCd = FLARE_COOLDOWN;
+  logEvent('flares');
+  if (game.slowT > 0) endSlowmo(); // flares out: snap back to full speed
   // fan of burning flares to both sides, with a little of the jet's speed so they hang in view
   const fx = -Math.sin(player.yaw);
   const fz = -Math.cos(player.yaw);
@@ -1415,6 +1423,48 @@ function deployFlares(source = 'key') {
   hud.toast(source === 'voice' ? '🎙 Flares!' : 'Flares!');
   return true;
 }
+// ---------- slow motion: time to say "Flares!" ----------
+function startSlowmo(reason) {
+  if (game.state !== 'playing' || game.slowT > 0 || game.slowCd > 0) return false;
+  if (game.flareCd > 0) { if (reason === 'key') hud.toast(`Flares in ${Math.ceil(game.flareCd)}s`); return false; }
+  game.slowT = SLOWMO_TIME;
+  game.slowCd = SLOWMO_COOLDOWN;
+  document.body.classList.add('slowmo');
+  ui.smPrompt.textContent = voice.on ? 'Say "Flares!"' : 'Press Q for flares!';
+  setSlowAudio(true);
+  sfx('slowIn');
+  return true;
+}
+function endSlowmo(silent = false) {
+  if (game.slowT <= 0 && !document.body.classList.contains('slowmo')) return;
+  game.slowT = 0;
+  document.body.classList.remove('slowmo');
+  setSlowAudio(false);
+  if (!silent) sfx('slowOut');
+}
+function updateSlowmo(rdt) {
+  if (game.slowCd > 0 && game.slowT <= 0) game.slowCd -= rdt;
+  if (game.slowT > 0) {
+    game.slowT -= rdt;
+    ui.smBar.style.width = `${Math.max(0, game.slowT / SLOWMO_TIME) * 100}%`;
+    if (Math.floor(game.slowT * 1.6) !== Math.floor((game.slowT + rdt) * 1.6)) sfx('heartbeat');
+    if (game.slowT <= 0) endSlowmo();
+  }
+  // ease time in and out so it feels like a game slow-mo, not a hard switch
+  const target = game.slowT > 0 ? SLOWMO_SCALE : 1;
+  game.timeScale = lerp(game.timeScale, target, damp(game.slowT > 0 ? 14 : 8, rdt));
+  if (Math.abs(game.timeScale - target) < 0.01) game.timeScale = target;
+}
+// boss fire heading for the jet while flares are ready: drop into slow motion
+function threatCheck() {
+  if (game.slowT > 0 || game.slowCd > 0 || game.flareCd > 0 || game.flareT > 0) return;
+  for (const b of bullets) {
+    if (!b.boss || b.decoy || b.st !== player.st) continue;
+    const r = b.s - player.s;
+    if (r > 6 && r < 45 && Math.abs(b.x - player.x) < 1.3) { startSlowmo('threat'); return; }
+  }
+}
+
 function decoy(b) {
   if (b.decoy) return;
   b.decoy = true;
@@ -1440,6 +1490,8 @@ function updateFlares(dt) {
   }
 }
 
+function logEvent(type, pos = player.pos) { game.pathEvents.push({ type, x: pos.x, z: pos.z }); }
+
 function stumble() {
   sfx('stumble');
   if (game.stumbleT > 0) { die('caught'); return; }
@@ -1458,7 +1510,7 @@ function smash(ob, st, byMissile) {
   burst(_v, ob.type === 'rock' ? 0xffa040 : 0xff5070, byMissile ? 28 : 18);
   puff(_v, 6, 1.6);
   sfx('boom');
-  if (byMissile) { game.score += 50 * game.mult; hud.toast(`+${50 * game.mult}`); }
+  if (byMissile) { game.score += 50 * game.mult; hud.toast(`+${50 * game.mult}`); logEvent('mine', _v); }
 }
 
 function killEnemy(e, byMissile) {
@@ -1469,6 +1521,7 @@ function killEnemy(e, byMissile) {
   sfx('boom');
   shake = Math.max(shake, 0.2);
   if (byMissile) {
+    logEvent('kill', e.mesh.position);
     game.kills++;
     game.score += 150 * game.mult;
     hud.toast(`Splash one! +${150 * game.mult}`);
@@ -1502,6 +1555,7 @@ function wingmanBlock(hit) {
 
 function launchWingman(target, msg) {
   game.wingmen--;
+  logEvent('wingman');
   wing.target.copy(target);
   wing.side = player.x <= 0 ? 1 : -1;
   wing.t = 0;
@@ -1688,6 +1742,7 @@ function hitBoss() {
   game.score += 100 * game.mult;
   if (b.hp <= 0) {
     b.dying = 0.0001;
+    logEvent('boss', b.mesh.position);
     game.levelClear = true;
     game.bossDone = true;
     game.score += 2000 * game.level;
@@ -1706,6 +1761,9 @@ function hitBoss() {
 
 function die(kind) {
   if (game.state !== 'playing') return;
+  game.path.push([player.pos.x, player.pos.z]);
+  game.endKind = kind;
+  endSlowmo(true);
   game.state = 'dying';
   game.deathKind = kind;
   game.deathT = 0;
@@ -1934,6 +1992,7 @@ function updatePlaying(dt) {
   else game.chaseGap = Math.min(CHASE_FAR, game.chaseGap + dt * 2.4);
 
   updatePlayerWorld();
+  if (game.dist >= game.pathNext) { game.path.push([player.pos.x, player.pos.z]); game.pathNext = game.dist + 2; }
   game.trail.push({ d: game.dist, x: player.pos.x, y: player.alt, z: player.pos.z });
   while (game.trail.length > 2 && game.trail[1].d < game.dist - 45) game.trail.shift();
 }
@@ -1999,6 +2058,7 @@ function updateEnemies(dt, prevPlayerS) {
     e.mesh.rotation.set(0, yawOf(e.st.dir) + Math.PI, -e.bank);
   }
   updateBullets(dt, prevPlayerS);
+  threatCheck();
 }
 
 function fireBullet(e) {
@@ -2352,8 +2412,8 @@ function updateCamera(dt) {
   if (ejecting) lookY = Math.max(lookY, pilotY() * 0.8);
   _v2.set(_v.x + fx * 12, lookY, _v.z + fz * 12);
   camera.lookAt(_v2);
-  if (game.state === 'playing') camera.rotateZ(jet.baseRoll * 0.12);
-  const fovTarget = (portrait ? 78 : 64) + (game.state === 'playing' ? (game.speed - BASE_SPEED) * 0.4 : 0);
+  if (game.state === 'playing') camera.rotateZ(jet.baseRoll * 0.12 + (1 - game.timeScale) * 0.08);
+  const fovTarget = (portrait ? 78 : 64) + (game.state === 'playing' ? (game.speed - BASE_SPEED) * 0.4 : 0) - (1 - game.timeScale) * 9;
   camera.fov = lerp(camera.fov, fovTarget, damp(2, dt));
   camera.updateProjectionMatrix();
 
@@ -2366,7 +2426,7 @@ function updateCamera(dt) {
 }
 
 // ============================================================ audio (WebAudio synth, no files)
-let actx = null, master = null, musicBus = null, guitarBus = null, leadBus = null, noiseBuf = null;
+let actx = null, master = null, slowFilter = null, musicBus = null, guitarBus = null, leadBus = null, noiseBuf = null;
 let muted = store.get('starlane.muted', false);
 let musicTimer = null, musicNext = 0, musicStep = 0, musicBar = 0;
 
@@ -2377,7 +2437,10 @@ function initAudio() {
   actx = new AC();
   master = actx.createGain();
   master.gain.value = muted ? 0 : 0.5;
-  master.connect(actx.destination);
+  slowFilter = actx.createBiquadFilter();
+  slowFilter.type = 'lowpass';
+  slowFilter.frequency.value = 20000;
+  master.connect(slowFilter).connect(actx.destination);
   musicBus = actx.createGain();
   musicBus.gain.value = 0.42;
   musicBus.connect(master);
@@ -2459,6 +2522,9 @@ function sfx(name) {
     case 'wingman': noise(t, 0.7, 0.3, 1200, 0.5); for (let i = 0; i < 5; i++) noise(t + 0.05 + i * 0.035, 0.04, 0.2, 2200, 1.2); tone(t, 520, 0.6, 'sawtooth', 0.05, 260, master, 1400); break;
     case 'hit': tone(t, 300, 0.12, 'square', 0.15, 120); noise(t, 0.15, 0.3, 900, 0.8); break;
     case 'flares': for (let i = 0; i < 7; i++) { noise(t + i * 0.07, 0.12, 0.35, 2600, 1.2); tone(t + i * 0.07, 900, 0.08, 'square', 0.04, 300); } noise(t, 1.4, 0.18, 4200, 0.4, 'highpass'); break;
+    case 'slowIn': tone(t, 420, 0.7, 'sawtooth', 0.12, 60, master, 900); noise(t, 0.6, 0.25, 500, 0.5, 'lowpass'); break;
+    case 'slowOut': tone(t, 80, 0.4, 'sawtooth', 0.1, 600, master, 2400); noise(t, 0.4, 0.3, 1800, 0.5); break;
+    case 'heartbeat': tone(t, 60, 0.12, 'sine', 0.5, 40); tone(t + 0.16, 55, 0.12, 'sine', 0.35, 38); break;
     case 'heard': tone(t, 1320, 0.07, 'sine', 0.08); tone(t + 0.07, 1760, 0.09, 'sine', 0.08); break;
     case 'thunder': noise(t, 2.2, 0.5, 120, 0.4, 'lowpass'); noise(t + 0.05, 0.5, 0.35, 400, 0.6, 'lowpass'); break;
     case 'drop': tone(t, 700, 0.35, 'sine', 0.08, 250); break;
@@ -2603,6 +2669,13 @@ function startMusic() {
   }, 25);
 }
 function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+function setSlowAudio(on) {
+  if (!actx || !slowFilter) return;
+  const t = actx.currentTime;
+  slowFilter.frequency.cancelScheduledValues(t);
+  slowFilter.frequency.setValueAtTime(slowFilter.frequency.value, t);
+  slowFilter.frequency.exponentialRampToValueAtTime(on ? 650 : 20000, t + (on ? 0.25 : 0.35));
+}
 function setMuted(m) {
   muted = m;
   store.set('starlane.muted', m);
@@ -2629,6 +2702,8 @@ const ui = {
   flareBtn: $('flareBtn'), flareSub: $('flareSub'), flareFill: $('flareFill'),
   micBadge: $('micBadge'), micLabel: $('micLabel'), micLevelBar: document.querySelector('#micLevel i'),
   voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'),
+  smPrompt: $('smPrompt'), smBar: $('smBar'), slowSub: $('slowSub'),
+  mapOver: $('mapOver'), legendOver: $('legendOver'), mapDone: $('mapDone'), legendDone: $('legendDone'),
 };
 const PLANE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1.6 6.2 7.9 5.3v2.2l-7.6-2.6-.6 5.4 2.9 2v1.8L12 21l-4.2.8V20l2.9-2-.6-5.4-7.6 2.6V13l7.9-5.3z"/></svg>';
 function renderWingmen() {
@@ -2681,6 +2756,7 @@ const hud = {
     ui.flareBtn.classList.toggle('active', game.flareT > 0);
     ui.flareFill.style.width = cd ? `${(1 - game.flareCd / FLARE_COOLDOWN) * 100}%` : '100%';
     this.set('flsub', ui.flareSub, game.flareT > 0 ? 'Decoying!' : cd ? `Ready in ${Math.ceil(game.flareCd)}s` : voice.on ? 'Say "flares" · Q' : 'Q · tap');
+    this.set('slsub', ui.slowSub, game.slowT > 0 ? 'Slow-mo!' : game.slowCd > 0 ? `Slow-mo in ${Math.ceil(game.slowCd)}s` : 'Slow-mo ready · Z');
     updateMicMeter();
     const camp = game.mode === 'campaign';
     const b = game.boss;
@@ -2908,6 +2984,114 @@ function renderHangar() {
 function openHangar() { initAudio(); renderHangar(); show(ui.menu, false); show(ui.hangar, true); }
 function closeHangar() { show(ui.hangar, false); show(ui.menu, true); }
 
+// ---------- flight path map (shown after a crash or a win) ----------
+const MAP_EVENTS = {
+  kill: { color: '#ff5a4f', label: 'Bandit down' },
+  mine: { color: '#ffd23f', label: 'Mine shot' },
+  wingman: { color: '#4fb3ff', label: 'Wingman save' },
+  flares: { color: '#ffffff', label: 'Flares' },
+  boss: { color: '#ffb23f', label: 'Boss down' },
+};
+let mapAnim = 0;
+function drawFlightMap(canvas, legend, endType) {
+  const pts = game.path.slice();
+  if (pts.length < 2) pts.push([player.pos.x, player.pos.z]);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth || 380;
+  const h = canvas.clientHeight || 190;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const c = canvas.getContext('2d');
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+  const pad = 22;
+  const spanX = Math.max(30, maxX - minX);
+  const spanZ = Math.max(30, maxZ - minZ);
+  const k = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanZ);
+  const ox = (w - spanX * k) / 2 - (minX - (spanX - (maxX - minX)) / 2) * k;
+  const oz = (h - spanZ * k) / 2 - (minZ - (spanZ - (maxZ - minZ)) / 2) * k;
+  const P = (x, z) => [ox + x * k, oz + z * k]; // north (-z) is up
+  const total = pts.length;
+  const ends = { crash: 'Crash', eject: 'Ejected', win: 'Victory' };
+  legend.innerHTML = '';
+  const add = (color, label) => {
+    const sp = document.createElement('span');
+    const dot = document.createElement('i');
+    dot.style.background = color;
+    sp.append(dot, document.createTextNode(label));
+    legend.appendChild(sp);
+  };
+  add('#6cff9e', 'Start');
+  add(endType === 'win' ? '#ffb23f' : '#ff3b3b', ends[endType] || 'End');
+  const seen = new Set(game.pathEvents.map((e) => e.type));
+  for (const [type, info] of Object.entries(MAP_EVENTS)) if (seen.has(type)) add(info.color, info.label);
+  add('linear-gradient(90deg,#4fb3ff,#ffb23f)', `${Math.floor(game.dist)} m flown`);
+
+  cancelAnimationFrame(mapAnim);
+  const t0 = performance.now();
+  const dur = 1300;
+  const frame = (now) => {
+    const prog = Math.min(1, (now - t0) / dur);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    // grid every 50 m
+    c.strokeStyle = 'rgba(159,211,255,0.08)';
+    c.lineWidth = 1;
+    const g = 50 * k;
+    if (g > 6) {
+      for (let x = ox % g; x < w; x += g) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+      for (let y = oz % g; y < h; y += g) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    }
+    c.fillStyle = 'rgba(159,211,255,0.5)';
+    c.font = '600 10px "Exo 2", sans-serif';
+    c.fillText('N ↑', w - 30, 16);
+    // path, coloured from blue (start) to orange (end)
+    const n = Math.max(2, Math.floor(total * prog));
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < n; i++) {
+        const f = i / total;
+        const [x1, y1] = P(pts[i - 1][0], pts[i - 1][1]);
+        const [x2, y2] = P(pts[i][0], pts[i][1]);
+        c.strokeStyle = pass === 0 ? 'rgba(255,178,63,0.12)' : `rgb(${Math.round(79 + 176 * f)},${Math.round(179 - 1 * f)},${Math.round(255 - 192 * f)})`;
+        c.lineWidth = pass === 0 ? 8 : 2.6;
+        c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      }
+    }
+    // events along the way
+    const cutoff = n / total;
+    game.pathEvents.forEach((e, i) => {
+      if ((i + 1) / (game.pathEvents.length + 1) > cutoff + 0.05) return;
+      const [x, y] = P(e.x, e.z);
+      c.fillStyle = MAP_EVENTS[e.type] ? MAP_EVENTS[e.type].color : '#fff';
+      c.beginPath(); c.arc(x, y, e.type === 'boss' ? 6 : 3.6, 0, Math.PI * 2); c.fill();
+    });
+    // start and end markers
+    const [sx, sy] = P(pts[0][0], pts[0][1]);
+    c.fillStyle = '#6cff9e';
+    c.beginPath(); c.arc(sx, sy, 5, 0, Math.PI * 2); c.fill();
+    if (prog >= 1) {
+      const [ex, ey] = P(pts[total - 1][0], pts[total - 1][1]);
+      if (endType === 'win') {
+        c.fillStyle = '#ffb23f';
+        c.beginPath(); c.moveTo(ex, ey); c.lineTo(ex, ey - 16); c.lineTo(ex + 11, ey - 12); c.lineTo(ex, ey - 8); c.fill();
+        c.fillRect(ex - 1, ey - 16, 2, 16);
+      } else {
+        c.strokeStyle = '#ff3b3b';
+        c.lineWidth = 3;
+        c.beginPath(); c.moveTo(ex - 6, ey - 6); c.lineTo(ex + 6, ey + 6); c.moveTo(ex + 6, ey - 6); c.lineTo(ex - 6, ey + 6); c.stroke();
+      }
+    } else {
+      const [px, py] = P(pts[n - 1][0], pts[n - 1][1]);
+      c.fillStyle = '#fff';
+      c.beginPath(); c.arc(px, py, 3.5, 0, Math.PI * 2); c.fill();
+    }
+    if (prog < 1) mapAnim = requestAnimationFrame(frame);
+  };
+  mapAnim = requestAnimationFrame(frame);
+}
+
 function refreshMenuStats() {
   ui.bestMenu.textContent = fmt(game.best);
   ui.bankMenu.textContent = fmt(game.bank);
@@ -2972,6 +3156,7 @@ function closeCampaign() { show(ui.campaign, false); show(ui.menu, true); }
 
 function levelComplete() {
   game.state = 'levelDone';
+  endSlowmo(true);
   stopMusic();
   hideTurnHint();
   const lv = LEVELS[game.level - 1];
@@ -2989,11 +3174,14 @@ function levelComplete() {
   ui.ldNext.textContent = final ? 'Play again' : `Level ${lv.n + 1}: ${LEVELS[lv.n].name}`;
   show(ui.hud, false);
   show(ui.levelDone, true);
+  game.path.push([player.pos.x, player.pos.z]);
+  drawFlightMap(ui.mapDone, ui.legendDone, 'win');
   sfx('victory');
 }
 
 function pauseGame() {
   if (game.state !== 'playing') return;
+  endSlowmo(true);
   game.state = 'paused';
   stopMusic();
   show(ui.pause, true);
@@ -3055,6 +3243,7 @@ function gameOver() {
   }
   show(ui.hud, false);
   show(ui.over, true);
+  drawFlightMap(ui.mapOver, ui.legendOver, game.deathKind === 'eject' ? 'eject' : 'crash');
   // the callsign box is not focused, so Space and Enter go straight to "Fly again"
 }
 
@@ -3126,6 +3315,7 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowDown': case 's': case 'S': actDive(); break;
     case 'e': case 'E': actLoop(); break;
     case 'q': case 'Q': deployFlares('key'); break;
+    case 'z': case 'Z': startSlowmo('key'); break;
     case 'Escape': if (game.state === 'playing') die('eject'); break; // the menu says Esc pauses. It doesn't.
     case 'p': case 'P': pauseGame(); break;
     case 'm': case 'M': setMuted(!muted); break;
@@ -3172,22 +3362,25 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
-  if (game.state !== 'paused') game.time += dt;
+  if (game.state === 'playing') updateSlowmo(dt);
+  const rdt = dt;
+  const gdt = dt * game.timeScale; // slow motion scales game time, not the camera or the UI
+  if (game.state !== 'paused') game.time += gdt;
 
-  if (game.state === 'playing') updatePlaying(dt);
-  else if (game.state === 'dying') updateDying(dt);
+  if (game.state === 'playing') updatePlaying(gdt);
+  else if (game.state === 'dying') updateDying(gdt);
 
   if (game.state !== 'paused') {
-    updateMissiles(dt);
-    updateSparks(dt);
-    updateSmoke(dt);
-    updateFlares(dt);
-    updateFlyingCoins(dt);
-    animateJet(dt);
-    animateDrone(dt);
-    animateWingman(dt);
-    animateWorld(dt);
-    updateCamera(dt);
+    updateMissiles(gdt);
+    updateSparks(gdt);
+    updateSmoke(gdt);
+    updateFlares(gdt);
+    updateFlyingCoins(gdt);
+    animateJet(gdt);
+    animateDrone(gdt);
+    animateWingman(gdt);
+    animateWorld(gdt);
+    updateCamera(rdt);
     updateDust();
   }
   if (game.state === 'playing') hud.update();
@@ -3203,7 +3396,7 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
-  deployFlares, voiceHeard, bullets,
+  deployFlares, voiceHeard, bullets, startSlowmo,
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },
