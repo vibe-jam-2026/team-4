@@ -20,7 +20,7 @@
     <div class="coins"><span class="coin-ico"></span><span id="coins">0</span></div>
     <button id="pauseBtn" class="icon-btn" aria-label="Pause">❚❚</button>
   </div>
-  <button id="flareBtn" class="flare-btn" aria-label="Deploy flares"><span class="fl-name">Flares</span><span class="fl-sub" id="flareSub">Q · say "flares"</span><i id="flareFill"></i></button>
+  <button id="flareBtn" class="flare-btn" aria-label="Deploy flares"><span class="fl-name">Flares</span><span class="fl-sub" id="flareSub">Q · say "flares"</span><span class="fl-slow" id="slowSub">Slow-mo ready</span><i id="flareFill"></i></button>
   <div id="micBadge" class="mic-badge hidden" title="Listening for voice commands"><span class="dot"></span><span id="micLabel">Mic</span><b id="micLevel"><i></i></b></div>
   <div id="ammo"><span class="msl" id="mslL"></span><span class="loop-ico" id="loopIco">E</span><span class="msl" id="mslR"></span></div>
   <div id="topCenter">
@@ -31,6 +31,16 @@
   <div id="powers"></div>
   <div id="turnHint"></div>
   <div id="toast"></div>
+</div>
+
+<div id="slowmo" aria-hidden="true">
+  <div class="sm-vignette"></div>
+  <div class="sm-lines"></div>
+  <div class="sm-box">
+    <div class="sm-title">Slow-mo</div>
+    <div class="sm-prompt" id="smPrompt">Say "Flares!"</div>
+    <div class="sm-bar"><i id="smBar"></i></div>
+  </div>
 </div>
 
 <div id="menu" class="screen">
@@ -53,7 +63,7 @@
       <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> barrel roll &nbsp; <kbd>E</kbd> loop</div>
       <div>Your 3 loyal wingmen shoot down mines and block boss fire</div>
       <div class="touch-only">Phone: swipe to steer, climb and dive · tap to fire</div>
-      <div><kbd>Q</kbd> or say <b>"Flares!"</b> to confuse boss fire</div>
+      <div><kbd>Q</kbd> or say <b>"Flares!"</b> to confuse boss fire · <kbd>Z</kbd> slow-mo</div>
       <div class="dim"><kbd>Esc</kbd> pause · <kbd>M</kbd> mute</div>
     </div>
     <div class="voice-row">
@@ -100,6 +110,7 @@
       <div><span>Rings</span><b id="ldRings">0</b></div>
       <div><span>Bandits</span><b id="ldKills">0</b></div>
     </div>
+    <div class="flightmap-wrap"><canvas id="mapDone" class="flightmap"></canvas><div class="map-legend" id="legendDone"></div></div>
     <button id="ldNext" class="big-btn">Next level</button>
     <button id="ldMenu" class="link-btn">Menu</button>
   </div>
@@ -122,6 +133,7 @@
       <div><span>Distance</span><b id="finalDist">0 m</b></div>
       <div><span>Rings</span><b id="finalCoins">0</b></div>
     </div>
+    <div class="flightmap-wrap"><canvas id="mapOver" class="flightmap"></canvas><div class="map-legend" id="legendOver"></div></div>
     <div class="best" id="newBest">Best: <b>0</b></div>
     <div id="nameRow" class="name-row hidden">
       <label for="nameInput">Top 10! Your callsign:</label>
