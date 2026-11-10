@@ -37,6 +37,8 @@ const LOOP_TIME = 1.35;
 const LOOP_R = 3.4;
 const LOOP_COOLDOWN = 1.5;
 const ROLL_TIME = 0.55;
+const FLARE_TIME = 2.6;     // how long boss fire is fooled after a flare drop
+const FLARE_COOLDOWN = 7;
 const POWER_TIME = { magnet: 10, shield: 8, double: 12 };
 const POWER_INFO = {
   magnet: { label: 'Tractor Beam', color: '#4d9bff' },
@@ -1075,6 +1077,7 @@ const game = {
   loopCd: 0, enemyT: 8, kills: 0,
   mode: 'endless', level: 0, wingmen: WINGMEN, boss: null, bossDone: false, levelClear: false,
   levelStartScore: 0, speedBonus: 0, diffOffset: 0, straightOnly: false, flash: 0, flashT: 3,
+  flareT: 0, flareCd: 0,
   best: store.get('starlane.best', 0), bank: store.get('starlane.bank', 0),
 };
 let campaign = store.get('wowf.campaign', { unlocked: 1, cleared: 0 });
@@ -1169,6 +1172,8 @@ const sparkPool = [];
 const smokes = [];
 const smokePool = [];
 const enemies = [];
+const flares = [];
+const flarePool = [];
 const bullets = [];
 const bulletPool = [];
 
@@ -1206,7 +1211,10 @@ function newGame(opts = {}) {
     score: opts.score || 0, levelStartScore: opts.score || 0,
     speedBonus: level ? Math.min(2, level - 1) * 3 : 0, diffOffset: level ? (level - 1) * 1200 : 0,
     straightOnly: !!(level && LEVELS[level - 1].straight), flash: 0, flashT: 3,
+    flareT: 0, flareCd: 0,
   });
+  for (const f of flares) f.mesh.visible = false;
+  flarePool.push(...flares.splice(0).map((f) => f.mesh));
   Object.assign(player, {
     s: 0, x: 0, y: 0, vy: 0, lane: 0, alt: CRUISE, air: false, slideT: 0, pendingTurn: 0, fireCd: 0,
     looping: false, loopT: 0, rollT: 0, rollDir: 0,
@@ -1372,6 +1380,64 @@ function actFire() {
     vs: game.speed + 4, t: 0, smokeT: 0, target,
   });
   sfx('missile');
+}
+
+// ---------- flares: decoys that pull boss fire away from the jet
+const FLARE_GEO = new THREE.SphereGeometry(0.16, 8, 6);
+function deployFlares(source = 'key') {
+  if (game.state !== 'playing') return false;
+  if (game.flareCd > 0) {
+    if (source !== 'voice') { sfx('click'); hud.toast(`Flares in ${Math.ceil(game.flareCd)}s`); }
+    return false;
+  }
+  game.flareT = FLARE_TIME;
+  game.flareCd = FLARE_COOLDOWN;
+  // fan of burning flares to both sides, with a little of the jet's speed so they hang in view
+  const fx = -Math.sin(player.yaw);
+  const fz = -Math.cos(player.yaw);
+  for (let i = 0; i < 14; i++) {
+    const side = i % 2 ? 1 : -1;
+    const m = flarePool.pop() || new THREE.Mesh(FLARE_GEO, new THREE.MeshBasicMaterial({ color: 0xfff1c4, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    if (!m.parent) scene.add(m);
+    m.visible = true;
+    m.material.opacity = 1;
+    m.position.copy(player.pos);
+    const out = side * rand(5, 10);
+    const fwd = game.speed * rand(0.45, 0.7);
+    flares.push({
+      mesh: m, t: -Math.floor(i / 2) * 0.07, life: rand(1.6, 2.2), smokeT: 0,
+      vx: fx * fwd - fz * out, vy: rand(1.5, 4.5), vz: fz * fwd + fx * out,
+    });
+  }
+  // anything a boss already has in the air goes for the flares
+  for (const b of bullets) if (b.boss) decoy(b);
+  sfx('flares');
+  hud.toast(source === 'voice' ? '🎙 Flares!' : 'Flares!');
+  return true;
+}
+function decoy(b) {
+  if (b.decoy) return;
+  b.decoy = true;
+  b.dx = (b.x >= player.x ? 1 : -1) * rand(5, 9);
+  b.dy = -rand(2, 5);
+}
+function updateFlares(dt) {
+  for (let i = flares.length - 1; i >= 0; i--) {
+    const f = flares[i];
+    f.t += dt;
+    if (f.t < 0) { f.mesh.position.copy(player.pos); continue; } // staggered launch
+    if (f.t >= f.life) { f.mesh.visible = false; flarePool.push(f.mesh); flares.splice(i, 1); continue; }
+    f.vy -= 6 * dt;
+    f.vx *= 0.985; f.vz *= 0.985;
+    f.mesh.position.x += f.vx * dt;
+    f.mesh.position.y += f.vy * dt;
+    f.mesh.position.z += f.vz * dt;
+    const flick = 1.6 + Math.sin(f.t * 40 + i) * 0.4;
+    f.mesh.scale.setScalar(flick * (1 - f.t / f.life * 0.5));
+    f.mesh.material.opacity = 1 - (f.t / f.life) ** 2;
+    f.smokeT -= dt;
+    if (f.smokeT <= 0) { f.smokeT = 0.05; puff(f.mesh.position, 1, 0.45, 0.9, 0xf2f2f2); }
+  }
 }
 
 function stumble() {
@@ -1772,6 +1838,8 @@ function updatePlaying(dt) {
   }
   if (player.fireCd > 0) player.fireCd -= dt;
   if (game.loopCd > 0) game.loopCd -= dt;
+  if (game.flareCd > 0) game.flareCd -= dt;
+  if (game.flareT > 0) game.flareT -= dt;
   if (player.rollT > 0) player.rollT -= dt;
   for (let i = 0; i < 2; i++) {
     if (jet.reload[i] > 0) {
@@ -1949,8 +2017,10 @@ function updateBullets(dt) {
     b.s -= b.v * dt;
     const onTrack = b.st === player.st;
     const r = onTrack ? b.s - player.s : -Infinity;
-    let dead = !onTrack || r < -12 || b.kill;
-    if (!dead && b.prevR >= -0.8 && r <= 1.0 && Math.abs(b.x - player.x) < 0.95 && Math.abs(b.y - player.alt) < 0.9) {
+    if (b.boss && game.flareT > 0 && r < 34) decoy(b);
+    if (b.decoy) { b.x += b.dx * dt; b.y += b.dy * dt; }
+    let dead = !onTrack || r < -12 || b.kill || (b.decoy && b.y < -6);
+    if (!dead && !b.decoy && b.prevR >= -0.8 && r <= 1.0 && Math.abs(b.x - player.x) < 0.95 && Math.abs(b.y - player.alt) < 0.9) {
       if (player.rollT > 0 || player.shield > 0 || game.levelClear) {
         burst(b.mesh.position, 0xffe080, 5);
         sfx('ping');
@@ -2388,6 +2458,8 @@ function sfx(name) {
     case 'click': tone(t, 900, 0.04, 'square', 0.05); break;
     case 'wingman': noise(t, 0.7, 0.3, 1200, 0.5); for (let i = 0; i < 5; i++) noise(t + 0.05 + i * 0.035, 0.04, 0.2, 2200, 1.2); tone(t, 520, 0.6, 'sawtooth', 0.05, 260, master, 1400); break;
     case 'hit': tone(t, 300, 0.12, 'square', 0.15, 120); noise(t, 0.15, 0.3, 900, 0.8); break;
+    case 'flares': for (let i = 0; i < 7; i++) { noise(t + i * 0.07, 0.12, 0.35, 2600, 1.2); tone(t + i * 0.07, 900, 0.08, 'square', 0.04, 300); } noise(t, 1.4, 0.18, 4200, 0.4, 'highpass'); break;
+    case 'heard': tone(t, 1320, 0.07, 'sine', 0.08); tone(t + 0.07, 1760, 0.09, 'sine', 0.08); break;
     case 'thunder': noise(t, 2.2, 0.5, 120, 0.4, 'lowpass'); noise(t + 0.05, 0.5, 0.35, 400, 0.6, 'lowpass'); break;
     case 'drop': tone(t, 700, 0.35, 'sine', 0.08, 250); break;
     case 'victory': [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(t + i * 0.12, f, 0.3, 'triangle', 0.15)); break;
@@ -2554,6 +2626,9 @@ const ui = {
   campaign: $('campaign'), levelList: $('levelList'), levelDone: $('levelDone'),
   ldKicker: $('ldKicker'), ldTitle: $('ldTitle'), ldScore: $('ldScore'), ldRings: $('ldRings'), ldKills: $('ldKills'), ldNext: $('ldNext'),
   againBtn: $('againBtn'), overBoardBtn: $('overBoardBtn'),
+  flareBtn: $('flareBtn'), flareSub: $('flareSub'), flareFill: $('flareFill'),
+  micBadge: $('micBadge'), micLabel: $('micLabel'), micLevelBar: document.querySelector('#micLevel i'),
+  voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'),
 };
 const PLANE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1.6 6.2 7.9 5.3v2.2l-7.6-2.6-.6 5.4 2.9 2v1.8L12 21l-4.2.8V20l2.9-2-.6-5.4-7.6 2.6V13l7.9-5.3z"/></svg>';
 function renderWingmen() {
@@ -2601,6 +2676,12 @@ const hud = {
     ui.mslR.classList.toggle('empty', !jet.msl[1].visible);
     ui.loopIco.classList.toggle('empty', player.looping || game.loopCd > 0);
     if (this.last.wm !== game.wingmen) { this.last.wm = game.wingmen; renderWingmen(); }
+    const cd = game.flareCd > 0;
+    ui.flareBtn.classList.toggle('cooldown', cd && game.flareT <= 0);
+    ui.flareBtn.classList.toggle('active', game.flareT > 0);
+    ui.flareFill.style.width = cd ? `${(1 - game.flareCd / FLARE_COOLDOWN) * 100}%` : '100%';
+    this.set('flsub', ui.flareSub, game.flareT > 0 ? 'Decoying!' : cd ? `Ready in ${Math.ceil(game.flareCd)}s` : voice.on ? 'Say "flares" · Q' : 'Q · tap');
+    updateMicMeter();
     const camp = game.mode === 'campaign';
     const b = game.boss;
     show(ui.levelBar, camp && !b);
@@ -2634,6 +2715,96 @@ const hud = {
     this.toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 1300);
   },
 };
+
+// ---------- voice commands: say "flares" into the laptop microphone ----------
+// Speech recognition (Chrome, Edge, Safari) listens through the default microphone, which on a
+// laptop is the built-in one. We also open that microphone ourselves to show its name and a
+// live level meter, so players can see which mic is listening.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const FLARE_WORDS = /\b(flares?|flairs?|flayers?|fl[ae]re?s?|deploy)\b/;
+const voice = { on: false, rec: null, stream: null, analyser: null, data: null, label: 'Microphone', lastHit: 0 };
+
+function voiceHeard(text) {
+  const t = (text || '').toLowerCase();
+  if (!FLARE_WORDS.test(t)) return false;
+  const now = performance.now();
+  if (now - voice.lastHit < 1200) return false; // one utterance arrives as several partial results
+  voice.lastHit = now;
+  ui.micBadge.classList.add('heard');
+  setTimeout(() => ui.micBadge.classList.remove('heard'), 400);
+  sfx('heard');
+  return deployFlares('voice');
+}
+
+async function startVoice() {
+  if (!SpeechRec) {
+    ui.voiceInfo.textContent = 'Voice commands need Chrome, Edge or Safari. You can still press Q or tap the Flares button.';
+    return;
+  }
+  initAudio();
+  try {
+    // ask for the laptop microphone (the default input) and keep it open for the level meter
+    voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const track = voice.stream.getAudioTracks()[0];
+    voice.label = (track && track.label) || 'Microphone';
+    if (actx && actx.createMediaStreamSource) {
+      voice.analyser = actx.createAnalyser();
+      voice.analyser.fftSize = 512;
+      voice.data = new Uint8Array(voice.analyser.fftSize);
+      actx.createMediaStreamSource(voice.stream).connect(voice.analyser);
+    }
+  } catch (err) {
+    ui.voiceInfo.textContent = 'The microphone was blocked. Allow microphone access for this page in the browser, then try again.';
+    return;
+  }
+  const rec = new SpeechRec();
+  rec.lang = 'en-US';
+  rec.continuous = true;
+  rec.interimResults = true; // react as soon as the word is heard, not at the end of the sentence
+  rec.maxAlternatives = 3;
+  rec.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let k = 0; k < e.results[i].length; k++) if (voiceHeard(e.results[i][k].transcript)) return;
+    }
+  };
+  rec.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      ui.voiceInfo.textContent = 'Speech recognition was blocked by the browser. Press Q or tap Flares instead.';
+      stopVoice();
+    }
+  };
+  rec.onend = () => { if (voice.on) { try { rec.start(); } catch { /* already restarting */ } } }; // keep listening
+  voice.rec = rec;
+  voice.on = true;
+  try { rec.start(); } catch { /* started already */ }
+  store.set('wowf.voice', true);
+  updateVoiceUi();
+}
+
+function stopVoice() {
+  voice.on = false;
+  if (voice.rec) { try { voice.rec.stop(); } catch { /* not running */ } voice.rec = null; }
+  if (voice.stream) { voice.stream.getTracks().forEach((t) => t.stop()); voice.stream = null; }
+  voice.analyser = null;
+  store.set('wowf.voice', false);
+  updateVoiceUi();
+}
+
+function updateVoiceUi() {
+  ui.voiceBtn.textContent = voice.on ? '🎤 Voice commands: on' : '🎤 Voice commands: off';
+  ui.voiceBtn.classList.toggle('on', voice.on);
+  if (voice.on) ui.voiceInfo.textContent = `Listening on: ${voice.label}. Say "Flares!" during a run.`;
+  ui.micLabel.textContent = voice.label.replace(/\s*\(.*\)\s*$/, '');
+  show(ui.micBadge, voice.on);
+}
+
+function updateMicMeter() {
+  if (!voice.on || !voice.analyser) return;
+  voice.analyser.getByteTimeDomainData(voice.data);
+  let peak = 0;
+  for (let i = 0; i < voice.data.length; i++) peak = Math.max(peak, Math.abs(voice.data[i] - 128));
+  ui.micLevelBar.style.width = `${Math.min(100, (peak / 64) * 100)}%`;
+}
 
 // ---------- leaderboard (local storage) ----------
 let lastEntryId = null;
@@ -2890,6 +3061,10 @@ function gameOver() {
 $('playBtn').addEventListener('click', startRun);
 $('againBtn').addEventListener('click', restart);
 $('campaignBtn').addEventListener('click', openCampaign);
+ui.flareBtn.addEventListener('click', (e) => { e.stopPropagation(); deployFlares('tap'); });
+ui.flareBtn.addEventListener('touchend', (e) => { e.stopPropagation(); }, { passive: true });
+ui.voiceBtn.addEventListener('click', () => { if (voice.on) stopVoice(); else startVoice(); });
+if (!SpeechRec) ui.voiceInfo.textContent = 'Voice commands need Chrome, Edge or Safari. You can still press Q or tap the Flares button.';
 $('campaignBack').addEventListener('click', closeCampaign);
 ui.ldNext.addEventListener('click', () => {
   if (game.level >= LEVELS.length) startCampaign(1, 0);
@@ -2950,6 +3125,7 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowUp': case 'w': case 'W': actClimb(); break;
     case 'ArrowDown': case 's': case 'S': actDive(); break;
     case 'e': case 'E': actLoop(); break;
+    case 'q': case 'Q': deployFlares('key'); break;
     case 'Escape': if (game.state === 'playing') die('eject'); break; // the menu says Esc pauses. It doesn't.
     case 'p': case 'P': pauseGame(); break;
     case 'm': case 'M': setMuted(!muted); break;
@@ -3005,6 +3181,7 @@ function frame(now) {
     updateMissiles(dt);
     updateSparks(dt);
     updateSmoke(dt);
+    updateFlares(dt);
     updateFlyingCoins(dt);
     animateJet(dt);
     animateDrone(dt);
@@ -3026,6 +3203,7 @@ requestAnimationFrame(frame);
 // small hook for automated smoke tests
 window.__game = { game, player, enemies, jet, spawnEnemy, spawnBoss, hitBoss, wing, startCampaign, startRun, actFire, actLoop, actSide, actClimb,
   // music control for recording trailers
+  deployFlares, voiceHeard, bullets,
   music: {
     want: setMusicTrack,
     force(name, bar = 0) { wantTrack = name; musicTrack = name; musicBar = bar; musicStep = 0; if (actx) { musicNext = actx.currentTime + 0.02; if (name === 'boss') crash(musicNext); } },

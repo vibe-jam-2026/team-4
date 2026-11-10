@@ -17,6 +17,7 @@ Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions 
 | Climb (over laser fences) | ↑ or W | swipe up |
 | Dive (under overhead barriers) | ↓ or S | swipe down |
 | Fire a missile (homes in on mines and fighters) | Space, F or click | tap |
+| Deploy flares (boss fire goes for the flares) | Q, or say **"Flares!"** | Flares button |
 | Pause / mute | P or the pause button / M | buttons |
 | Pause? | Esc | |
 
@@ -64,6 +65,12 @@ python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000>. Opening `index.html` straight from disk does not work, because ES modules need to be served over HTTP.
+
+### Flares and voice commands
+
+Flares are decoys. Deploy them and, for about 2.5 seconds, boss fire locks onto the flares and veers away instead of hitting you. They then need about 7 seconds to reload; the Flares button in the bottom-left corner shows the countdown.
+
+You can deploy them by voice: click **🎤 Voice commands** in the menu, allow microphone access, and shout **"Flares!"** during a run. It listens through the laptop's built-in microphone (the browser's default input). The menu and a small badge in the game show the name of the microphone it is using, with a live level meter. If it names a headset instead, switch Chrome's microphone setting to the built-in one. Voice commands use the browser's speech recognition, which works in Chrome, Edge and Safari but not Firefox. Recognition runs through the browser's speech service. The Q key and the Flares button always work too.
 
 ### Music
 
