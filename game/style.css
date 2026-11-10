@@ -243,3 +243,11 @@ canvas#game { transition: filter .2s; }
 .map-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 6px; font-size: 11px; opacity: .85; }
 .map-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .map-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+
+/* loud-noise trigger: threshold marker on the mic meter, sensitivity slider */
+.mic-badge b { position: relative; width: 48px; }
+.mic-badge b u { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #ffd27a; left: 60%; }
+.mic-badge b i.hot { background: #ffd27a; }
+.sens { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; font-weight: 600; }
+.sens input { width: 120px; accent-color: #ffb23f; }
+.sens span { min-width: 54px; text-align: left; opacity: .85; }

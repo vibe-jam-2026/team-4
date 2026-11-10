@@ -1430,7 +1430,7 @@ function startSlowmo(reason) {
   game.slowT = SLOWMO_TIME;
   game.slowCd = SLOWMO_COOLDOWN;
   document.body.classList.add('slowmo');
-  ui.smPrompt.textContent = voice.on ? 'Say "Flares!"' : 'Press Q for flares!';
+  ui.smPrompt.textContent = voice.on ? 'Shout "Flares!"' : 'Press Q for flares!';
   setSlowAudio(true);
   sfx('slowIn');
   return true;
@@ -2701,7 +2701,7 @@ const ui = {
   againBtn: $('againBtn'), overBoardBtn: $('overBoardBtn'),
   flareBtn: $('flareBtn'), flareSub: $('flareSub'), flareFill: $('flareFill'),
   micBadge: $('micBadge'), micLabel: $('micLabel'), micLevelBar: document.querySelector('#micLevel i'),
-  voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'),
+  voiceBtn: $('voiceBtn'), voiceInfo: $('voiceInfo'), micSens: $('micSens'), micSensVal: $('micSensVal'), micThr: $('micThr'),
   smPrompt: $('smPrompt'), smBar: $('smBar'), slowSub: $('slowSub'),
   mapOver: $('mapOver'), legendOver: $('legendOver'), mapDone: $('mapDone'), legendDone: $('legendDone'),
 };
@@ -2755,7 +2755,7 @@ const hud = {
     ui.flareBtn.classList.toggle('cooldown', cd && game.flareT <= 0);
     ui.flareBtn.classList.toggle('active', game.flareT > 0);
     ui.flareFill.style.width = cd ? `${(1 - game.flareCd / FLARE_COOLDOWN) * 100}%` : '100%';
-    this.set('flsub', ui.flareSub, game.flareT > 0 ? 'Decoying!' : cd ? `Ready in ${Math.ceil(game.flareCd)}s` : voice.on ? 'Say "flares" · Q' : 'Q · tap');
+    this.set('flsub', ui.flareSub, game.flareT > 0 ? 'Decoying!' : cd ? `Ready in ${Math.ceil(game.flareCd)}s` : voice.on ? 'Shout · Q · tap' : 'Q · tap');
     this.set('slsub', ui.slowSub, game.slowT > 0 ? 'Slow-mo!' : game.slowCd > 0 ? `Slow-mo in ${Math.ceil(game.slowCd)}s` : 'Slow-mo ready · Z');
     updateMicMeter();
     const camp = game.mode === 'campaign';
@@ -2792,74 +2792,55 @@ const hud = {
   },
 };
 
-// ---------- voice commands: say "flares" into the laptop microphone ----------
-// Speech recognition (Chrome, Edge, Safari) listens through the default microphone, which on a
-// laptop is the built-in one. We also open that microphone ourselves to show its name and a
-// live level meter, so players can see which mic is listening.
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-const FLARE_WORDS = /\b(flares?|flairs?|flayers?|fl[ae]re?s?|deploy)\b/;
-const voice = { on: false, rec: null, stream: null, analyser: null, data: null, label: 'Microphone', lastHit: 0 };
+// ---------- shout for flares: a loud noise into the laptop microphone deploys flares ----------
+// We open the default microphone (on a laptop, the built-in one) and watch its level. The game
+// learns the room's background noise and fires when a sudden sound rises well above it, so a
+// shout of "Flares!", a clap or a bang on the desk all work. Nothing is recorded or sent.
+const SENS_STEPS = [
+  { name: 'Low', ratio: 6, min: 0.2 },
+  { name: 'Lower', ratio: 4.8, min: 0.14 },
+  { name: 'Normal', ratio: 3.8, min: 0.1 },
+  { name: 'Higher', ratio: 3, min: 0.07 },
+  { name: 'High', ratio: 2.4, min: 0.045 },
+];
+const voice = { on: false, stream: null, analyser: null, data: null, label: 'Microphone', floor: 0.01, hot: 0, lastHit: 0, sens: clamp(store.get('wowf.micSens', 3), 1, 5) };
 
-function voiceHeard(text) {
-  const t = (text || '').toLowerCase();
-  if (!FLARE_WORDS.test(t)) return false;
+function voiceHeard() {
   const now = performance.now();
-  if (now - voice.lastHit < 1200) return false; // one utterance arrives as several partial results
+  if (now - voice.lastHit < 1200) return false;
   voice.lastHit = now;
   ui.micBadge.classList.add('heard');
   setTimeout(() => ui.micBadge.classList.remove('heard'), 400);
-  sfx('heard');
   return deployFlares('voice');
 }
 
 async function startVoice() {
-  if (!SpeechRec) {
-    ui.voiceInfo.textContent = 'Voice commands need Chrome, Edge or Safari. You can still press Q or tap the Flares button.';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    ui.voiceInfo.textContent = 'This browser cannot open the microphone. Press Q or tap the Flares button instead.';
     return;
   }
   initAudio();
   try {
-    // ask for the laptop microphone (the default input) and keep it open for the level meter
-    voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-    const track = voice.stream.getAudioTracks()[0];
-    voice.label = (track && track.label) || 'Microphone';
-    if (actx && actx.createMediaStreamSource) {
-      voice.analyser = actx.createAnalyser();
-      voice.analyser.fftSize = 512;
-      voice.data = new Uint8Array(voice.analyser.fftSize);
-      actx.createMediaStreamSource(voice.stream).connect(voice.analyser);
-    }
+    // echo cancellation keeps the game's own explosions from triggering flares
+    voice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
   } catch (err) {
     ui.voiceInfo.textContent = 'The microphone was blocked. Allow microphone access for this page in the browser, then try again.';
     return;
   }
-  const rec = new SpeechRec();
-  rec.lang = 'en-US';
-  rec.continuous = true;
-  rec.interimResults = true; // react as soon as the word is heard, not at the end of the sentence
-  rec.maxAlternatives = 3;
-  rec.onresult = (e) => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      for (let k = 0; k < e.results[i].length; k++) if (voiceHeard(e.results[i][k].transcript)) return;
-    }
-  };
-  rec.onerror = (e) => {
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      ui.voiceInfo.textContent = 'Speech recognition was blocked by the browser. Press Q or tap Flares instead.';
-      stopVoice();
-    }
-  };
-  rec.onend = () => { if (voice.on) { try { rec.start(); } catch { /* already restarting */ } } }; // keep listening
-  voice.rec = rec;
+  const track = voice.stream.getAudioTracks()[0];
+  voice.label = (track && track.label) || 'Microphone';
+  voice.analyser = actx.createAnalyser();
+  voice.analyser.fftSize = 1024;
+  voice.data = new Float32Array(voice.analyser.fftSize);
+  actx.createMediaStreamSource(voice.stream).connect(voice.analyser);
+  voice.floor = 0.01;
   voice.on = true;
-  try { rec.start(); } catch { /* started already */ }
   store.set('wowf.voice', true);
   updateVoiceUi();
 }
 
 function stopVoice() {
   voice.on = false;
-  if (voice.rec) { try { voice.rec.stop(); } catch { /* not running */ } voice.rec = null; }
   if (voice.stream) { voice.stream.getTracks().forEach((t) => t.stop()); voice.stream = null; }
   voice.analyser = null;
   store.set('wowf.voice', false);
@@ -2867,19 +2848,36 @@ function stopVoice() {
 }
 
 function updateVoiceUi() {
-  ui.voiceBtn.textContent = voice.on ? '🎤 Voice commands: on' : '🎤 Voice commands: off';
+  ui.voiceBtn.textContent = voice.on ? '🎤 Shout for flares: on' : '🎤 Shout for flares: off';
   ui.voiceBtn.classList.toggle('on', voice.on);
-  if (voice.on) ui.voiceInfo.textContent = `Listening on: ${voice.label}. Say "Flares!" during a run.`;
+  if (voice.on) ui.voiceInfo.textContent = `Listening on: ${voice.label}. Shout "Flares!" (any loud noise works) during a run.`;
   ui.micLabel.textContent = voice.label.replace(/\s*\(.*\)\s*$/, '');
+  ui.micSensVal.textContent = SENS_STEPS[voice.sens - 1].name;
+  ui.micSens.value = voice.sens;
   show(ui.micBadge, voice.on);
 }
 
+// called every frame during a run: meter, background-noise tracking and the trigger
 function updateMicMeter() {
   if (!voice.on || !voice.analyser) return;
-  voice.analyser.getByteTimeDomainData(voice.data);
-  let peak = 0;
-  for (let i = 0; i < voice.data.length; i++) peak = Math.max(peak, Math.abs(voice.data[i] - 128));
-  ui.micLevelBar.style.width = `${Math.min(100, (peak / 64) * 100)}%`;
+  voice.analyser.getFloatTimeDomainData(voice.data);
+  let sum = 0;
+  for (let i = 0; i < voice.data.length; i++) sum += voice.data[i] * voice.data[i];
+  const rms = Math.sqrt(sum / voice.data.length);
+  const step = SENS_STEPS[voice.sens - 1];
+  const threshold = Math.max(step.min, voice.floor * step.ratio);
+  if (rms < threshold) {
+    voice.floor = lerp(voice.floor, Math.max(0.002, rms), rms > voice.floor ? 0.01 : 0.05); // follow the room, slowly
+    voice.hot = 0;
+  } else if (++voice.hot >= 2) { // loud for two frames in a row: a real shout, not a click
+    voice.hot = -12;
+    voiceHeard();
+  }
+  // meter: the yellow tick marks the trigger level
+  const scale = threshold * 1.6;
+  ui.micLevelBar.style.width = `${Math.min(100, (rms / scale) * 100)}%`;
+  ui.micLevelBar.classList.toggle('hot', rms >= threshold);
+  ui.micThr.style.left = `${(threshold / scale) * 100}%`;
 }
 
 // ---------- leaderboard (local storage) ----------
@@ -3253,7 +3251,13 @@ $('campaignBtn').addEventListener('click', openCampaign);
 ui.flareBtn.addEventListener('click', (e) => { e.stopPropagation(); deployFlares('tap'); });
 ui.flareBtn.addEventListener('touchend', (e) => { e.stopPropagation(); }, { passive: true });
 ui.voiceBtn.addEventListener('click', () => { if (voice.on) stopVoice(); else startVoice(); });
-if (!SpeechRec) ui.voiceInfo.textContent = 'Voice commands need Chrome, Edge or Safari. You can still press Q or tap the Flares button.';
+ui.micSens.addEventListener('input', () => {
+  voice.sens = clamp(Number(ui.micSens.value) || 3, 1, 5);
+  store.set('wowf.micSens', voice.sens);
+  ui.micSensVal.textContent = SENS_STEPS[voice.sens - 1].name;
+});
+ui.micSensVal.textContent = SENS_STEPS[voice.sens - 1].name;
+ui.micSens.value = voice.sens;
 $('campaignBack').addEventListener('click', closeCampaign);
 ui.ldNext.addEventListener('click', () => {
   if (game.level >= LEVELS.length) startCampaign(1, 0);

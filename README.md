@@ -17,7 +17,7 @@ Play it at <https://vibe-jam-2026.github.io/team-4/>. The exercise instructions 
 | Climb (over laser fences) | ↑ or W | swipe up |
 | Dive (under overhead barriers) | ↓ or S | swipe down |
 | Fire a missile (homes in on mines and fighters) | Space, F or click | tap |
-| Deploy flares (boss fire goes for the flares) | Q, or say **"Flares!"** | Flares button |
+| Deploy flares (boss fire goes for the flares) | Q, or shout **"Flares!"** (any loud noise) | Flares button |
 | Slow motion (when flares are ready) | Z | |
 | Pause / mute | P or the pause button / M | buttons |
 | Pause? | Esc | |
@@ -71,9 +71,11 @@ Then open <http://localhost:8000>. Opening `index.html` straight from disk does 
 
 Flares are decoys. Deploy them and, for about 2.5 seconds, boss fire locks onto the flares and veers away instead of hitting you. They then need about 7 seconds to reload; the Flares button in the bottom-left corner shows the countdown.
 
-**Slow motion:** when a boss burst comes at you and your flares are ready, the game drops into slow motion. Time runs at a quarter of normal speed for up to 3 seconds, with a desaturated picture, a vignette, a slight zoom and muffled sound, so you have time to say "Flares!". You can also trigger it yourself with **Z**. It has a 12-second cooldown and only works while flares are ready. Deploying flares snaps time back to normal.
+**Slow motion:** when a boss burst comes at you and your flares are ready, the game drops into slow motion. Time runs at a quarter of normal speed for up to 3 seconds, with a desaturated picture, a vignette, a slight zoom and muffled sound, so you have time to shout "Flares!". You can also trigger it yourself with **Z**. It has a 12-second cooldown and only works while flares are ready. Deploying flares snaps time back to normal.
 
-You can deploy them by voice: click **🎤 Voice commands** in the menu, allow microphone access, and shout **"Flares!"** during a run. It listens through the laptop's built-in microphone (the browser's default input). The menu and a small badge in the game show the name of the microphone it is using, with a live level meter. If it names a headset instead, switch Chrome's microphone setting to the built-in one. Voice commands use the browser's speech recognition, which works in Chrome, Edge and Safari but not Firefox. Recognition runs through the browser's speech service. The Q key and the Flares button always work too.
+You can also deploy them by **shouting**. Click **🎤 Shout for flares** in the menu and allow microphone access. During a run, any sudden loud noise into the laptop's microphone deploys flares: shouting "Flares!", a clap, or a bang on the desk. The game learns the room's background noise and only reacts to sounds well above it. A **Mic sensitivity** slider in the menu adjusts how loud the noise has to be.
+
+It uses the laptop's built-in microphone (the browser's default input). The menu and a small in-game badge show the microphone's name and a live level meter, with a yellow tick marking the trigger level. If the badge names a headset, switch the browser's microphone to the built-in one. The game's own sounds are filtered by the browser's echo cancellation; headphones make it even more reliable. It works in every browser, and the audio never leaves the laptop: nothing is recorded or sent.
 
 ### Flight path map
 
