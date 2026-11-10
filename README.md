@@ -115,6 +115,10 @@ When you shoot down a level's boss, the Gripen flies home to a floating sky airb
 
 All music is original and synthesized live in the browser, with no audio files. Normal flying has a driving synthwave cruise track. When a boss appears, the music crashes into a fast 80s rock-synth anthem, with power chords, gated drums and a soaring lead. It switches back once the boss is down. A recording of the switch is in [media/music-preview.mp3](media/music-preview.mp3).
 
+### Pitch video
+
+A one-minute pitch video (1920×1080, 30 fps) showing most of the game is in [media/pitch-video.mp4](media/pitch-video.mp4). It covers flying the track and turning, climbing and diving, barrel rolls and loops, homing missiles, loyal wingmen, the Hangar, Armory and campaign menus, the final boss fight with slow motion, flares and Longbow missiles, the landing and taxi to the hangar, the pilot debrief and flight map, and the Esc ejection. It was rendered frame by frame from the real game, and the soundtrack is the game's own music and sound effects.
+
 ### Trailer
 
 A 5-second vertical (9:16) trailer for reels and stories is in [media/trailer-reel.mp4](media/trailer-reel.mp4). Its soundtrack is the game's own audio: the boss anthem and the in-game sound effects, rendered in sync with the picture.
